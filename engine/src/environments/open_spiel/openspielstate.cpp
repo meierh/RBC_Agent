@@ -28,7 +28,7 @@
 #include <functional>
 
 OpenSpielState::OpenSpielState():
-    currentVariant(open_spiel::gametype::SupportedOpenSpielVariants::HEX),
+    currentVariant(open_spiel::gametype::SupportedOpenSpielVariants::RBC),
     spielGame(open_spiel::LoadGame(StateConstantsOpenSpiel::variant_to_string(currentVariant))),
     spielState(spielGame->NewInitialState())
 {
@@ -89,8 +89,10 @@ std::string OpenSpielState::fen() const
 void OpenSpielState::do_action(Action action)
 {
     auto player = spielState->CurrentPlayer();
-    if(player == 1){
-        int X = action / 11; //currently easier to set board size fix; change it later
+
+    if (currentVariant == open_spiel::gametype::SupportedOpenSpielVariants::HEX)
+    {
+        int X = action / 11; // currently easier to set board size fix; change it later
         int Y = action % 11;
         spielState->ApplyAction(Y*11+X);
         return;
@@ -119,11 +121,14 @@ int OpenSpielState::side_to_move() const
     // spielState->CurrentPlayer()) may return negative values for terminal values.
     // This implementation assumes a two player game with ordered turns.
     // MoveNumber() assumes to be the number of plies and not chess moves.
+    
+    // TODO: MoveNumber no longer available
     return spielState->MoveNumber() % 2;
 }
 
 Key OpenSpielState::hash_key() const
 {
+    // TODO: Check their method
     std::hash<std::string> hash_string;
     return hash_string(this->fen());
 }
@@ -135,6 +140,7 @@ void OpenSpielState::flip()
 
 Action OpenSpielState::uci_to_action(std::string &uciStr) const
 {
+    // TODO: Write StringToAction
     return spielState->StringToAction(uciStr);
 }
 
@@ -176,6 +182,7 @@ void OpenSpielState::print(std::ostream &os) const
 
 Tablebase::WDLScore OpenSpielState::check_for_tablebase_wdl(Tablebase::ProbeState &result)
 {
+    return; // not implemented
     return Tablebase::WDLScoreNone;
 }
 

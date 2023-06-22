@@ -33,6 +33,7 @@
 #include "open_spiel/games/chess.h"
 #include "open_spiel/games/hex.h"
 #include "open_spiel/games/dark_hex.h"
+#include "open_spiel/games/rbc.h"
 
 namespace open_spiel {
 namespace gametype {
@@ -40,7 +41,8 @@ enum SupportedOpenSpielVariants : uint8_t {
     HEX = 0,  // 11x11 board
     DARKHEX = 1,
     CHESS = 2,
-    YORKTOWN = 3,
+    RBC = 3,
+    YORKTOWN = 4,
 };
 }
 }
@@ -49,16 +51,18 @@ class StateConstantsOpenSpiel : public StateConstantsInterface<StateConstantsOpe
 {
 public:
     static uint BOARD_WIDTH() {
+        return open_spiel::rbc::BoardSize();
         return open_spiel::hex::kDefaultBoardSize;
     }
     static uint BOARD_HEIGHT() {
-        return  open_spiel::hex::kDefaultBoardSize;
+        return open_spiel::rbc::BoardSize();
+        return open_spiel::hex::kDefaultBoardSize;
     }
     static uint NB_CHANNELS_TOTAL() {
-        return 9;  // TODO
+        return 58;  // TODO
     }
     static uint NB_LABELS() {
-        return 121; // NB_CHANNELS_TOTAL()*BOARD_HEIGHT()*BOARD_WIDTH();  // TODO
+        return 64; // NB_CHANNELS_TOTAL()*BOARD_HEIGHT()*BOARD_WIDTH();  // TODO
     }
     static uint NB_LABELS_POLICY_MAP() {
         return BOARD_HEIGHT()*BOARD_WIDTH();  // TODO
@@ -67,6 +71,7 @@ public:
         return 0U;
     }
     static int NB_PLAYERS() {
+        return open_spiel::rbc::NumPlayer();
         return  open_spiel::hex::kNumPlayers;
     }
     static std::string action_to_uci(Action action, bool is960) {
@@ -84,6 +89,7 @@ public:
     static std::vector<std::string> available_variants() {
         return {"hex",
                 "chess",
+                "rbc",
                 "yorktown"};
     }
 
@@ -92,6 +98,8 @@ public:
         case open_spiel::gametype::SupportedOpenSpielVariants::HEX:
             return ". . . . . . . . . . .  . . . . . . . . . . .   . . . . . . . . . . .    . . . . . . . . . . .     . . . . . . . . . . .      . . . . . . . . . . .       . . . . . . . . . . .        . . . . . . . . . . .         . . . . . . . . . . .          . . . . . . . . . . .           . . . . . . . . . . .";
         case open_spiel::gametype::SupportedOpenSpielVariants::CHESS:
+            return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+        case open_spiel::gametype::SupportedOpenSpielVariants::RBC:
             return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
         case open_spiel::gametype::SupportedOpenSpielVariants::YORKTOWN:
             return "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR w - - 0 1";
