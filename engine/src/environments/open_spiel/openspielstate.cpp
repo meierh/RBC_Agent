@@ -182,7 +182,6 @@ void OpenSpielState::print(std::ostream &os) const
 
 Tablebase::WDLScore OpenSpielState::check_for_tablebase_wdl(Tablebase::ProbeState &result)
 {
-    return; // not implemented
     return Tablebase::WDLScoreNone;
 }
 

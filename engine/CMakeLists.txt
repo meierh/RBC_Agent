@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 set (CMAKE_CXX_STANDARD 17)
 
 option(USE_PROFILING             "Build with profiling"   OFF)
-option(USE_RL                    "Build with reinforcement learning support"  OFF)
+option(USE_RL                    "Build with reinforcement learning support"  ON)
 option(BACKEND_TENSORRT          "Build with TensorRT support"  ON)
 option(BACKEND_TENSORRT_7        "Build with deprecated TensorRT 7 support"  OFF)
 option(BACKEND_MXNET             "Build with MXNet backend (Blas/IntelMKL/CUDA/TensorRT) support"  OFF)
@@ -287,6 +287,8 @@ if (MODE_OPEN_SPIEL OR MODE_STRATEGO)
       spiel_utils.h
       tensor_game.cc
       tensor_game.h
+      utils/usage_logging.h
+      utils/usage_logging.cc
     )
 
     file(GLOB open_spiel_abseil_files
@@ -352,6 +354,8 @@ if (MODE_OPEN_SPIEL OR MODE_STRATEGO)
             "3rdparty/open_spiel/open_spiel/games/hex.cc"
             "3rdparty/open_spiel/open_spiel/games/dark_hex.h"
             "3rdparty/open_spiel/open_spiel/games/dark_hex.cc"
+	    "3rdparty/open_spiel/open_spiel/games/rbc.h"
+	    "3rdparty/open_spiel/open_speil/games/rbc.cc"
             )
     endif()
 
