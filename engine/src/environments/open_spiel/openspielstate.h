@@ -51,11 +51,11 @@ class StateConstantsOpenSpiel : public StateConstantsInterface<StateConstantsOpe
 {
 public:
     static uint BOARD_WIDTH() {
-        return open_spiel::rbc::BoardSize();
+        return 8;
         return open_spiel::hex::kDefaultBoardSize;
     }
     static uint BOARD_HEIGHT() {
-        return open_spiel::rbc::BoardSize();
+        return 8;
         return open_spiel::hex::kDefaultBoardSize;
     }
     static uint NB_CHANNELS_TOTAL() {
@@ -71,7 +71,7 @@ public:
         return 0U;
     }
     static int NB_PLAYERS() {
-        return open_spiel::rbc::NumPlayer();
+        return 2;
         return  open_spiel::hex::kNumPlayers;
     }
     static std::string action_to_uci(Action action, bool is960) {
