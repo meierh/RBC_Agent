@@ -87,7 +87,7 @@ public:
 
     static std::vector<std::string> available_variants() {
         return {"hex",
-		"dark_hex",
+                "dark_hex",
                 "chess",
                 "rbc"};
     }

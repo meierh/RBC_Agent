@@ -35,6 +35,7 @@ OpenSpielState::OpenSpielState():
 }
 
 OpenSpielState::OpenSpielState(const OpenSpielState &openSpielState):
+    currentVariant(openSpielState.currentVariant),
     spielGame(openSpielState.spielGame->shared_from_this()),
     spielState(openSpielState.spielState->Clone())
 {
@@ -47,10 +48,10 @@ std::vector<Action> OpenSpielState::legal_actions() const
 
 inline void OpenSpielState::check_variant(int variant)
 {
-//    if (variant != currentVariant) {
-//        currentVariant = open_spiel::gametype::SupportedOpenSpielVariants(variant);
-//        spielGame = open_spiel::LoadGame(StateConstantsOpenSpiel::variant_to_string(currentVariant));
-//    }
+    if (variant != currentVariant) {
+        currentVariant = open_spiel::gametype::SupportedOpenSpielVariants(variant);
+        spielGame = open_spiel::LoadGame(StateConstantsOpenSpiel::variant_to_string(currentVariant));
+    }
 }
 
 void OpenSpielState::set(const std::string &fenStr, bool isChess960, int variant)
@@ -66,9 +67,10 @@ void OpenSpielState::set(const std::string &fenStr, bool isChess960, int variant
 void OpenSpielState::get_state_planes(bool normalize, float *inputPlanes, Version version) const
 {
     std::fill(inputPlanes, inputPlanes+StateConstantsOpenSpiel::NB_VALUES_TOTAL(), 0.0f);
-    std::vector<float> v(spielGame->ObservationTensorSize());
-    spielState->ObservationTensor(spielState->CurrentPlayer(), absl::MakeSpan(v));
-    std::copy( v.begin(), v.end(), inputPlanes);
+    // TODO fix the double free error
+//    std::vector<float> v(spielGame->ObservationTensorSize());
+//    spielState->ObservationTensor(spielState->CurrentPlayer(), absl::MakeSpan(v));
+//    std::copy( v.begin(), v.end(), inputPlanes);
 }
 
 unsigned int OpenSpielState::steps_from_null() const
@@ -88,8 +90,6 @@ std::string OpenSpielState::fen() const
 
 void OpenSpielState::do_action(Action action)
 {
-    auto player = spielState->CurrentPlayer();
-
     if (currentVariant == open_spiel::gametype::SupportedOpenSpielVariants::HEX)
     {
         int X = action / 11; // currently easier to set board size fix; change it later
@@ -97,10 +97,11 @@ void OpenSpielState::do_action(Action action)
         spielState->ApplyAction(Y*11+X);
         return;
     }
-    auto tmp = spielState->CurrentPlayer();
-    std::cout << spielState->ToString() << "  Apply  " << action << "  " << spielState->ActionToString(spielState->CurrentPlayer(), action) << std::endl;
+    string fen = spielState->ToString();
+    string uciAction = spielState->ActionToString(spielState->CurrentPlayer(), action);
+    std::cout << fen << "  Apply  " << action << "  " << uciAction << std::endl;
     spielState->ApplyAction(action);
-   // spielState->ApplyAction(001);
+    spielState->ApplyAction(001);   // dummy sense action
 }
 
 void OpenSpielState::undo_action(Action action)
@@ -203,5 +204,5 @@ OpenSpielState* OpenSpielState::clone() const
 void OpenSpielState::init(int variant, bool isChess960) {
     check_variant(variant);
     spielState = spielGame->NewInitialState();
-    spielState->ApplyAction(1);
+    spielState->ApplyAction(1);  // dummy sense action
 }
