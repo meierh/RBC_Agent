@@ -47,10 +47,10 @@ std::vector<Action> OpenSpielState::legal_actions() const
 
 inline void OpenSpielState::check_variant(int variant)
 {
-    if (variant != currentVariant) {
-        currentVariant = open_spiel::gametype::SupportedOpenSpielVariants(variant);
-        spielGame = open_spiel::LoadGame(StateConstantsOpenSpiel::variant_to_string(currentVariant));
-    }
+//    if (variant != currentVariant) {
+//        currentVariant = open_spiel::gametype::SupportedOpenSpielVariants(variant);
+//        spielGame = open_spiel::LoadGame(StateConstantsOpenSpiel::variant_to_string(currentVariant));
+//    }
 }
 
 void OpenSpielState::set(const std::string &fenStr, bool isChess960, int variant)
@@ -73,7 +73,7 @@ void OpenSpielState::get_state_planes(bool normalize, float *inputPlanes, Versio
 
 unsigned int OpenSpielState::steps_from_null() const
 {
-    return spielState->MoveNumber();  // note: MoveNumber != PlyCount
+    return spielState->MoveNumber() / 2;  // note: MoveNumber != PlyCount
 }
 
 bool OpenSpielState::is_chess960() const
@@ -97,7 +97,10 @@ void OpenSpielState::do_action(Action action)
         spielState->ApplyAction(Y*11+X);
         return;
     }
+    auto tmp = spielState->CurrentPlayer();
+    std::cout << spielState->ToString() << "  Apply  " << action << "  " << spielState->ActionToString(spielState->CurrentPlayer(), action) << std::endl;
     spielState->ApplyAction(action);
+   // spielState->ApplyAction(001);
 }
 
 void OpenSpielState::undo_action(Action action)
@@ -123,7 +126,7 @@ int OpenSpielState::side_to_move() const
     // MoveNumber() assumes to be the number of plies and not chess moves.
     
     // TODO: MoveNumber no longer available
-    return spielState->MoveNumber() % 2;
+    return spielState->MoveNumber() % 3;
 }
 
 Key OpenSpielState::hash_key() const
@@ -153,11 +156,13 @@ std::string OpenSpielState::action_to_san(Action action, const std::vector<Actio
 TerminalType OpenSpielState::is_terminal(size_t numberLegalMoves, float &customTerminalValue) const
 {
     if (spielState->IsTerminal()) {
-        const double currentReturn = spielState->Returns()[spielState->MoveNumber() % 2];
-        if (currentReturn == spielGame->MaxUtility()) {
+	std::cout << "TERMINAL: " << spielState->ToString() << "   -   " << spielState->Returns()[0] << ":" << spielState->Returns()[1] << std::endl;
+        const double currentReturn = spielState->Returns()[0];
+	std::cout << currentReturn << std::endl;
+	if (currentReturn == spielGame->MaxUtility()) {
             return TERMINAL_WIN;
         }
-        if (currentReturn == spielGame->MinUtility() + spielGame->MaxUtility()) {
+        if (currentReturn == 0) {
             return TERMINAL_DRAW;
         }
         if (currentReturn == spielGame->MinUtility()) {
@@ -198,4 +203,5 @@ OpenSpielState* OpenSpielState::clone() const
 void OpenSpielState::init(int variant, bool isChess960) {
     check_variant(variant);
     spielState = spielGame->NewInitialState();
+    spielState->ApplyAction(1);
 }

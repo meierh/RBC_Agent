@@ -94,8 +94,9 @@ public:
 
     static std::string start_fen(int variant) {
         switch (variant) {
-        case open_spiel::gametype::SupportedOpenSpielVariants::HEX:
-            return ". . . . . . . . . . .  . . . . . . . . . . .   . . . . . . . . . . .    . . . . . . . . . . .     . . . . . . . . . . .      . . . . . . . . . . .       . . . . . . . . . . .        . . . . . . . . . . .         . . . . . . . . . . .          . . . . . . . . . . .           . . . . . . . . . . .";
+	info_string_important(variant);
+	case open_spiel::gametype::SupportedOpenSpielVariants::HEX:
+	            return ". . . . . . . . . . .  . . . . . . . . . . .   . . . . . . . . . . .    . . . . . . . . . . .     . . . . . . . . . . .      . . . . . . . . . . .       . . . . . . . . . . .        . . . . . . . . . . .         . . . . . . . . . . .          . . . . . . . . . . .           . . . . . . . . . . .";
         case open_spiel::gametype::SupportedOpenSpielVariants::CHESS:
             return "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
         case open_spiel::gametype::SupportedOpenSpielVariants::RBC:
