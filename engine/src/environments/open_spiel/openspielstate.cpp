@@ -36,6 +36,7 @@ OpenSpielState::OpenSpielState():
 }
 
 OpenSpielState::OpenSpielState(const OpenSpielState &openSpielState):
+    currentVariant(openSpielState.currentVariant),
     spielGame(openSpielState.spielGame->shared_from_this()),
     spielState(openSpielState.spielState->Clone())
 {
@@ -67,17 +68,15 @@ void OpenSpielState::set(const std::string &fenStr, bool isChess960, int variant
 void OpenSpielState::get_state_planes(bool normalize, float *inputPlanes, Version version) const
 {
     std::fill(inputPlanes, inputPlanes+StateConstantsOpenSpiel::NB_VALUES_TOTAL(), 0.0f);
-    std::vector<float> v(spielGame->ObservationTensorSize());
-    spielState->ObservationTensor(spielState->CurrentPlayer(), absl::MakeSpan(v));
-    std::copy( v.begin(), v.end(), inputPlanes);
-    
-    
-    
+    // TODO fix the double free error
+//    std::vector<float> v(spielGame->ObservationTensorSize());
+//    spielState->ObservationTensor(spielState->CurrentPlayer(), absl::MakeSpan(v));
+//    std::copy( v.begin(), v.end(), inputPlanes);
 }
 
 unsigned int OpenSpielState::steps_from_null() const
 {
-    return spielState->MoveNumber();  // note: MoveNumber != PlyCount
+    return spielState->MoveNumber() / 2;  // note: MoveNumber != PlyCount
 }
 
 bool OpenSpielState::is_chess960() const
@@ -92,8 +91,6 @@ std::string OpenSpielState::fen() const
 
 void OpenSpielState::do_action(Action action)
 {
-    auto player = spielState->CurrentPlayer();
-
     if (currentVariant == open_spiel::gametype::SupportedOpenSpielVariants::HEX)
     {
         int X = action / 11; // currently easier to set board size fix; change it later
@@ -101,7 +98,11 @@ void OpenSpielState::do_action(Action action)
         spielState->ApplyAction(Y*11+X);
         return;
     }
+    string fen = spielState->ToString();
+    string uciAction = spielState->ActionToString(spielState->CurrentPlayer(), action);
+    std::cout << fen << "  Apply  " << action << "  " << uciAction << std::endl;
     spielState->ApplyAction(action);
+    spielState->ApplyAction(001);   // dummy sense action
 }
 
 void OpenSpielState::undo_action(Action action)
@@ -127,7 +128,7 @@ int OpenSpielState::side_to_move() const
     // MoveNumber() assumes to be the number of plies and not chess moves.
     
     // TODO: MoveNumber no longer available
-    return spielState->MoveNumber() % 2;
+    return spielState->MoveNumber() % 3;
 }
 
 Key OpenSpielState::hash_key() const
@@ -157,11 +158,13 @@ std::string OpenSpielState::action_to_san(Action action, const std::vector<Actio
 TerminalType OpenSpielState::is_terminal(size_t numberLegalMoves, float &customTerminalValue) const
 {
     if (spielState->IsTerminal()) {
-        const double currentReturn = spielState->Returns()[spielState->MoveNumber() % 2];
-        if (currentReturn == spielGame->MaxUtility()) {
+	std::cout << "TERMINAL: " << spielState->ToString() << "   -   " << spielState->Returns()[0] << ":" << spielState->Returns()[1] << std::endl;
+        const double currentReturn = spielState->Returns()[0];
+	std::cout << currentReturn << std::endl;
+	if (currentReturn == spielGame->MaxUtility()) {
             return TERMINAL_WIN;
         }
-        if (currentReturn == spielGame->MinUtility() + spielGame->MaxUtility()) {
+        if (currentReturn == 0) {
             return TERMINAL_DRAW;
         }
         if (currentReturn == spielGame->MinUtility()) {
@@ -186,7 +189,6 @@ void OpenSpielState::print(std::ostream &os) const
 
 Tablebase::WDLScore OpenSpielState::check_for_tablebase_wdl(Tablebase::ProbeState &result)
 {
-    return; // not implemented
     return Tablebase::WDLScoreNone;
 }
 
@@ -203,4 +205,5 @@ OpenSpielState* OpenSpielState::clone() const
 void OpenSpielState::init(int variant, bool isChess960) {
     check_variant(variant);
     spielState = spielGame->NewInitialState();
+    spielState->ApplyAction(1);  // dummy sense action
 }

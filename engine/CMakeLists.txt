@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 2.8)
 set (CMAKE_CXX_STANDARD 17)
 
 option(USE_PROFILING             "Build with profiling"   OFF)
-option(USE_RL                    "Build with reinforcement learning support"  OFF)
+option(USE_RL                    "Build with reinforcement learning support"  ON)
 option(BACKEND_TENSORRT          "Build with TensorRT support"  ON)
 option(BACKEND_TENSORRT_7        "Build with deprecated TensorRT 7 support"  OFF)
 option(BACKEND_MXNET             "Build with MXNet backend (Blas/IntelMKL/CUDA/TensorRT) support"  OFF)
@@ -12,10 +12,10 @@ option(BACKEND_OPENVINO          "Build with OpenVino backend (CPU/GPU) support"
 option(BUILD_TESTS               "Build and run tests"  OFF)
 option(USE_DYNAMIC_NN_ARCH       "Build with dynamic neural network architektur support"  ON)
 # enable a single mode for different model input / outputs
-option(MODE_CRAZYHOUSE           "Build with crazyhouse only support"  ON)
+option(MODE_CRAZYHOUSE           "Build with crazyhouse only support"  OFF)
 option(MODE_CHESS                "Build with chess + chess960 only support"  OFF)
 option(MODE_LICHESS              "Build with lichess variants support"  OFF)
-option(MODE_OPEN_SPIEL           "Build with open_spiel environment support"  OFF)
+option(MODE_OPEN_SPIEL           "Build with open_spiel environment support"  ON)
 option(MODE_BOARDGAMES           "Build with Fairy-Stockfish environment support for board games"   OFF)
 option(MODE_XIANGQI              "Build with xiangqi only support" OFF)
 option(MODE_STRATEGO             "Build Stratego with open_spiel environment support"  OFF)
@@ -287,6 +287,10 @@ if (MODE_OPEN_SPIEL OR MODE_STRATEGO)
       spiel_utils.h
       tensor_game.cc
       tensor_game.h
+      utils/usage_logging.h
+      utils/usage_logging.cc
+      games/rbc.h # does not belong here but only works here ???
+      games/rbc.cc
     )
 
     file(GLOB open_spiel_abseil_files
@@ -352,6 +356,8 @@ if (MODE_OPEN_SPIEL OR MODE_STRATEGO)
             "3rdparty/open_spiel/open_spiel/games/hex.cc"
             "3rdparty/open_spiel/open_spiel/games/dark_hex.h"
             "3rdparty/open_spiel/open_spiel/games/dark_hex.cc"
+	    "3rdparty/open_spiel/open_spiel/games/rbc.h"
+	    "3rdparty/open_spiel/open_speil/games/rbc.cc"
             )
     endif()
 
