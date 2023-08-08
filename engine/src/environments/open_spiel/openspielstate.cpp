@@ -31,6 +31,7 @@ OpenSpielState::OpenSpielState():
     currentVariant(open_spiel::gametype::SupportedOpenSpielVariants::RBC),
     spielGame(open_spiel::LoadGame(StateConstantsOpenSpiel::variant_to_string(currentVariant))),
     spielState(spielGame->NewInitialState())
+    
 {
 }
 
@@ -69,6 +70,9 @@ void OpenSpielState::get_state_planes(bool normalize, float *inputPlanes, Versio
     std::vector<float> v(spielGame->ObservationTensorSize());
     spielState->ObservationTensor(spielState->CurrentPlayer(), absl::MakeSpan(v));
     std::copy( v.begin(), v.end(), inputPlanes);
+    
+    
+    
 }
 
 unsigned int OpenSpielState::steps_from_null() const
