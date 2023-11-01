@@ -67,6 +67,49 @@ void RBCAgent::set_search_settings
     MCTSAgentBatch::set_search_settings(pos,searchLimits,evalInfo);
 }
 
+std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAgent::generateHypotheses
+(
+    const ChessInformationSet::ChessPiecesInformation& piecesOpponent,
+    const ChessInformationSet::ChessPiecesInformation& piecesSelf,
+    const RBCAgent::PieceColor selfColor
+) const
+{
+    auto hypotheses = std::make_unique<std::vector<ChessInformationSet::ChessPiecesInformation>>();
+    
+    auto pawnLegalMoves = [&](const ChessInformationSet::Square& sq)
+    {
+        bool hasNotMoved=false;
+        if(selfColor == PieceColor::White)
+        {
+            if(sq.row == ChessInformationSet::ChessRow::one)
+                std::logic_error("White pawn can not be on row one");
+            else if(sq.row == ChessInformationSet::ChessRow::two)
+                hasNotMoved=true;
+        }
+        else
+        {
+            if(sq.row == ChessInformationSet::ChessRow::eight)
+                std::logic_error("Black pawn can not be on row eight");
+            else if(sq.row == ChessInformationSet::ChessRow::seven)
+                hasNotMoved=true;
+        }
+        
+        auto legalDestinations = std::make_unique<std::vector<ChessInformationSet::Square>>();
+        
+    };
+    // pawn movement
+    
+    return hypotheses;
+}
+
+std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAgent::generateHypotheses
+(
+    const ChessInformationSet::ChessPiecesInformation& piecesOpponent
+) const
+{
+    return generateHypotheses(piecesOpponent,this->playerPiecesTracker,this->selfColor);
+}
+
 std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
 (
     StateObj *pos,
@@ -203,6 +246,7 @@ ChessInformationSet::Square RBCAgent::applyScanAction
 {
     return {ChessInformationSet::ChessColumn::A,ChessInformationSet::ChessRow::one}; // dummy
 }
+
 
 
 /*

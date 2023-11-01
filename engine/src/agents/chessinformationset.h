@@ -59,6 +59,28 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     return std::hash<ChessColumn>{}(s.column)^std::hash<ChessRow>{}(s.row);
                 }
             }Hasher;
+            
+            // general movement vectors
+            bool vertPlus(std::uint8_t multiple);
+            bool vertMinus(std::uint8_t multiple);
+            bool horizPlus(std::uint8_t multiple);
+            bool horizMinus(std::uint8_t multiple);
+            bool diagVertPlusHorizPlus(std::uint8_t multiple);
+            bool diagVertMinusHorizPlus(std::uint8_t multiple);
+            bool diagVertPlusHorizMinus(std::uint8_t multiple);
+            bool diagVertMinusHorizMinus(std::uint8_t multiple);
+            
+            // special knight moves
+            bool knightVertPlusHorizPlus();
+            bool knightVertPlusHorizMinus();
+            
+            bool knightVertPlusHorizPlus();
+            bool knightVertPlusHorizMinus();
+            
+            
+            bool diagVertMinusHorizPlus();
+            bool diagVertPlusHorizMinus();
+            bool diagVertMinusHorizMinus();            
         };
         enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
                           rook1=8,knight1=9,bishop1=10,queen=11,king=12,bishop2=13,knight2=14,rook2=15};

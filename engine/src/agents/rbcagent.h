@@ -30,6 +30,7 @@
 
 #include "mctsagentbatch.h"
 #include "chessinformationset.h"
+#include <stdexcept>
 
 /*
 #include "../evalinfo.h"
@@ -61,9 +62,11 @@ private:
         std::vector<ChessInformationSet::Square> kings;
     };
     enum Player {Self, Opponent};
+    enum PieceColor {White,Black};
 
     ChessInformationSet cis;
-    ChessInformationSet::ChessPiecesInformation playerPiecesTracker; 
+    ChessInformationSet::ChessPiecesInformation playerPiecesTracker;
+    PieceColor selfColor;
 
 public:
     RBCAgent
@@ -93,36 +96,76 @@ public:
         SearchLimits* searchLimits,
         EvalInfo* evalInfo
     );
-
     
-    /*
-    string get_name() const override;
-    void evaluate_board_state() override;
-    */
+    /**
+     * @brief
+     * @param piecesSelf
+     * @param piecesOpponent
+     * @param selfColor
+     * @return
+     */
+    std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> generateHypotheses
+    (
+        const ChessInformationSet::ChessPiecesInformation& piecesOpponent,
+        const ChessInformationSet::ChessPiecesInformation& piecesSelf,
+        const PieceColor selfColor
+    ) const;
 
 private:
+    /**
+     * @brief
+     * @param piecesSelf
+     * @return
+     */
+    std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> generateHypotheses
+    (
+        const ChessInformationSet::ChessPiecesInformation& piecesOpponent
+    ) const;
+    
+    /**
+     * @brief
+     * @param pos
+     * @param side
+     * @return
+     */
     std::unique_ptr<ChessPiecesObservation> getDecodedStatePlane
     (
         StateObj *pos,
         const Player side        
     ) const;
     
+    /**
+     * @brief
+     * @param pos
+     */
     void handleOpponentMoveInfo
     (
         StateObj *pos
     );
     
+    /**
+     * @brief
+     * @param pos
+     */
     ChessInformationSet::Square applyScanAction
     (
         StateObj *pos
     );
 
+    /**
+     * @brief
+     * @param pos
+     * @param scanCenter
+     */
     void handleScanInfo
     (
         StateObj *pos,
         ChessInformationSet::Square scanCenter
     );
     
+    /**
+     * @brief
+     */
     void handleMoveInfo();  
 };
 
