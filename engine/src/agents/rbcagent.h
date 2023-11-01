@@ -29,6 +29,8 @@
 #define RBCAGENT_H
 
 #include "mctsagentbatch.h"
+#include "chessinformationset.h"
+
 /*
 #include "../evalinfo.h"
 #include "../node.h"
@@ -47,25 +49,81 @@ using namespace crazyara;
 
 class RBCAgent : public MCTSAgentBatch
 {
-private:
-    ChessInformationSet cis;
-    int a=1;
+private:   
+    class ChessPiecesObservation
+    {
+    public:
+        std::vector<ChessInformationSet::Square> pawns;
+        std::vector<ChessInformationSet::Square> knights;
+        std::vector<ChessInformationSet::Square> bishops;
+        std::vector<ChessInformationSet::Square> rooks;
+        std::vector<ChessInformationSet::Square> queens;
+        std::vector<ChessInformationSet::Square> kings;
+    };
+    enum Player {Self, Opponent};
 
+    ChessInformationSet cis;
+    ChessInformationSet::ChessPiecesInformation playerPiecesTracker; 
 
 public:
-    RBCAgent(NeuralNetAPI* netSingle,
-              vector<unique_ptr<NeuralNetAPI>>& netBatches,
-              SearchSettings* searchSettings,
-              PlaySettings* playSettings,
-              int iterations,
-              bool splitNodes);
+    RBCAgent
+    (
+        NeuralNetAPI* netSingle,
+        vector<unique_ptr<NeuralNetAPI>>& netBatches,
+        SearchSettings* searchSettings,
+        PlaySettings* playSettings,
+        int iterations,
+        bool splitNodes
+    );
     //~RBCAgent();
     RBCAgent(const RBCAgent&) = delete;
     RBCAgent& operator=(RBCAgent const&) = delete;
+    
+    /**
+     * @brief set_search_settings 
+     * Implements the InformationSet reduction and the observation in rbc
+     * Sets all relevant parameters for the next search
+     * @param pos Board position to evaluate
+     * @param limits Pointer to the search limit
+     * @param evalInfo Returns the evaluation information
+     */
+    void set_search_settings
+    (
+        StateObj *state,
+        SearchLimits* searchLimits,
+        EvalInfo* evalInfo
+    );
 
+    
+    /*
     string get_name() const override;
     void evaluate_board_state() override;
-};
+    */
 
+private:
+    std::unique_ptr<ChessPiecesObservation> getDecodedStatePlane
+    (
+        StateObj *pos,
+        const Player side        
+    ) const;
+    
+    void handleOpponentMoveInfo
+    (
+        StateObj *pos
+    );
+    
+    ChessInformationSet::Square applyScanAction
+    (
+        StateObj *pos
+    );
+
+    void handleScanInfo
+    (
+        StateObj *pos,
+        ChessInformationSet::Square scanCenter
+    );
+    
+    void handleMoveInfo();  
+};
 
 #endif // RBCAGENT_H

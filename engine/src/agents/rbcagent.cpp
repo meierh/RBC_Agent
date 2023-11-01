@@ -51,15 +51,161 @@ RBCAgent::RBCAgent
     bool sN
 ):
 MCTSAgentBatch(netSingle, netBatches, searchSettings, playSettings, noa, sN)
+{}
+
+void RBCAgent::set_search_settings
+(
+    StateObj *pos,
+    SearchLimits *searchLimits,
+    EvalInfo* evalInfo
+)
 {
-    int a=1;
+    handleOpponentMoveInfo(pos);
+    ChessInformationSet::Square scanCenter = applyScanAction(pos);
+    handleScanInfo(pos,scanCenter);
+    
+    MCTSAgentBatch::set_search_settings(pos,searchLimits,evalInfo);
 }
 
-/*
-RBCAgent::~RBCAgent()
-{}
-*/
+std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
+(
+    StateObj *pos,
+    const Player side  
+) const
+{
+    auto obs = std::make_unique<ChessPiecesObservation>();
+    
+    // decode here
+    
+    return obs;
+}
 
+void RBCAgent::handleOpponentMoveInfo
+(
+    StateObj *pos
+)
+{
+    std::vector<ChessInformationSet::Square> captureSquares;
+    std::unique_ptr<ChessPiecesObservation> ownPiecesObs = getDecodedStatePlane(pos,Player::Self);
+    std::unordered_map<std::uint8_t,std::vector<ChessInformationSet::Square>*> comparisonSet = 
+    {
+        {0,&(ownPiecesObs->pawns)},{1,&(ownPiecesObs->pawns)},{2,&(ownPiecesObs->pawns)},{3,&(ownPiecesObs->pawns)},{4,&(ownPiecesObs->pawns)},{5,&(ownPiecesObs->pawns)},{6,&(ownPiecesObs->pawns)},{7,&(ownPiecesObs->pawns)},
+        {8,&(ownPiecesObs->rooks)},{15,&(ownPiecesObs->rooks)},
+        {9,&(ownPiecesObs->knights)},{14,&(ownPiecesObs->knights)},
+        {10,&(ownPiecesObs->bishops)},{13,&(ownPiecesObs->bishops)},
+        {11,&(ownPiecesObs->queens)},
+        {12,&(ownPiecesObs->kings)}
+    };
+    
+    // Test for captured pawns
+    for(unsigned int i=0; i<16; i++) 
+    {
+        std::pair<ChessInformationSet::Square,bool>& onePiece = playerPiecesTracker.data[i];
+        if(onePiece.second)
+        {
+            bool pieceExist = false;
+            std::vector<ChessInformationSet::Square>* set = comparisonSet[i];
+            for(ChessInformationSet::Square& obsOwnPawn : *set)
+            {
+                if(obsOwnPawn == onePiece.first)
+                    pieceExist = true;
+            }
+            if(!pieceExist)
+            {
+                captureSquares.push_back(onePiece.first);
+                onePiece.second = false;
+            }
+        }
+    }
+    
+    if(captureSquares.size()>1)
+    {
+        // Throw error
+    }
+    else if(captureSquares.size()==1)
+    {
+        std::vector<ChessInformationSet::Square> noPieces;
+        std::vector<std::pair<ChessInformationSet::PieceType,ChessInformationSet::Square>> knownPieces;
+        cis.markIncompatibleBoards(noPieces,captureSquares,knownPieces);
+    }
+}
+
+void RBCAgent::handleScanInfo
+(
+    StateObj *pos,
+    ChessInformationSet::Square scanCenter
+)
+{
+    std::unique_ptr<ChessPiecesObservation> opponentPiecesObs = getDecodedStatePlane(pos,Player::Opponent);
+    
+    std::unordered_set<ChessInformationSet::Square,ChessInformationSet::Square::Hasher> scannedSquares;
+    int colC = static_cast<int>(scanCenter.column);
+    int rowC = static_cast<int>(scanCenter.row);
+    for(int col=colC-1; col<colC+2; col++)
+    {
+        for(int row=rowC-1; col<rowC+2; row++)
+        {
+            if(row>=0 && row<8)
+            {
+                if(col>=0 && row<8)
+                {
+                    ChessInformationSet::ChessColumn c = static_cast<ChessInformationSet::ChessColumn>(col);
+                    ChessInformationSet::ChessRow r = static_cast<ChessInformationSet::ChessRow>(row);
+                    scannedSquares.insert({c,r});
+                }
+            }
+        }
+    }
+
+    std::vector<ChessInformationSet::Square> noPieces;
+    std::vector<ChessInformationSet::Square> unknownPieces;
+    std::vector<std::pair<ChessInformationSet::PieceType,ChessInformationSet::Square>> knownPieces;
+    
+    for(ChessInformationSet::Square sq : opponentPiecesObs->pawns)
+        knownPieces.push_back({ChessInformationSet::PieceType::pawn,sq});
+    
+    for(ChessInformationSet::Square sq : opponentPiecesObs->knights)
+        knownPieces.push_back({ChessInformationSet::PieceType::knight,sq});
+    
+    for(ChessInformationSet::Square sq : opponentPiecesObs->bishops)
+        knownPieces.push_back({ChessInformationSet::PieceType::bishop,sq});
+    
+    for(ChessInformationSet::Square sq : opponentPiecesObs->rooks)
+        knownPieces.push_back({ChessInformationSet::PieceType::rook,sq});
+    
+    for(ChessInformationSet::Square sq : opponentPiecesObs->queens)
+        knownPieces.push_back({ChessInformationSet::PieceType::queen,sq});
+    
+    for(ChessInformationSet::Square sq : opponentPiecesObs->kings)
+        knownPieces.push_back({ChessInformationSet::PieceType::king,sq});
+    
+    for(std::pair<ChessInformationSet::PieceType,ChessInformationSet::Square> knownPiece : knownPieces)
+    {
+        auto iter = scannedSquares.find(knownPiece.second);
+        if(iter!=scannedSquares.end())
+        {
+            scannedSquares.erase(iter);
+        }
+    }
+    
+    for(auto iter = scannedSquares.begin(); iter!=scannedSquares.end(); iter++)
+    {
+        noPieces.push_back(*iter);
+    }
+    
+    cis.markIncompatibleBoards(noPieces,unknownPieces,knownPieces);
+}
+
+ChessInformationSet::Square RBCAgent::applyScanAction
+(
+    StateObj *pos
+)
+{
+    return {ChessInformationSet::ChessColumn::A,ChessInformationSet::ChessRow::one}; // dummy
+}
+
+
+/*
 string RBCAgent::get_name() const
 {
     return MCTSAgentBatch::get_name();
@@ -69,3 +215,4 @@ void RBCAgent::evaluate_board_state()
 {
     MCTSAgentBatch::evaluate_board_state();
 }
+*/

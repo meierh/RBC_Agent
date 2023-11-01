@@ -83,6 +83,17 @@ void CrazyAra::welcome()
 void CrazyAra::uci_loop(int argc, char *argv[])
 {
     unique_ptr<StateObj> state = make_unique<StateObj>();
+    
+    /*
+    #include <typeinfo>
+    cout<<"type:"<<typeid(*state).name()<<endl;
+    std::vector<Action> act = state->legal_actions();
+    for(Action oneAct : act)
+        cout<<oneAct<<endl;
+    cout<<"actions.size():"<<act.size()<<endl;
+    cout<<"variant:"<<variant<<endl;
+    */
+    
     string token, cmd;
     EvalInfo evalInfo;
     variant = StateConstants::variant_to_int(Options["UCI_Variant"]);

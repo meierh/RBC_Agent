@@ -31,9 +31,55 @@ ChessInformationSet::PieceType ChessInformationSet::boardIndexToPieceType
     return type;
 }
 
+std::unique_ptr<std::array<std::pair<ChessInformationSet::Square,bool>,8>> ChessInformationSet::ChessPiecesInformation::extractPawns() const
+{
+    auto res = std::make_unique<std::array<std::pair<Square,bool>,8>>();
+    for(unsigned int i=0;i<8;i++)
+        (*res)[i] = data[i];
+    return res;
+};
+
+std::unique_ptr<std::array<std::pair<ChessInformationSet::Square,bool>,2>> ChessInformationSet::ChessPiecesInformation::extractRooks() const
+{
+    auto res = std::make_unique<std::array<std::pair<Square,bool>,2>>();
+    (*res)[0] = data[8];
+    (*res)[1] = data[15];
+    return res;
+};
+
+std::unique_ptr<std::array<std::pair<ChessInformationSet::Square,bool>,2>> ChessInformationSet::ChessPiecesInformation::extractKnights() const
+{
+    auto res = std::make_unique<std::array<std::pair<Square,bool>,2>>();
+    (*res)[0] = data[9];
+    (*res)[1] = data[14];
+    return res;
+};
+
+std::unique_ptr<std::array<std::pair<ChessInformationSet::Square,bool>,2>> ChessInformationSet::ChessPiecesInformation::extractBishops() const
+{
+    auto res = std::make_unique<std::array<std::pair<Square,bool>,2>>();
+    (*res)[0] = data[10];
+    (*res)[1] = data[13];
+    return res;
+};
+
+std::unique_ptr<std::array<std::pair<ChessInformationSet::Square,bool>,1>> ChessInformationSet::ChessPiecesInformation::extractQueens() const
+{
+    auto res = std::make_unique<std::array<std::pair<Square,bool>,1>>();
+    (*res)[0] = data[11];
+    return res;
+};
+
+std::unique_ptr<std::array<std::pair<ChessInformationSet::Square,bool>,1>> ChessInformationSet::ChessPiecesInformation::extractKings() const
+{
+    auto res = std::make_unique<std::array<std::pair<Square,bool>,1>>();
+    (*res)[0] = data[12];
+    return res;
+};
+
 void ChessInformationSet::setBoard
 (
-    const std::array<std::pair<Square,bool>,16> pieces,
+    const ChessInformationSet::ChessPiecesInformation& pieces,
     const double probability,
     const std::uint64_t index
 )
@@ -43,12 +89,12 @@ void ChessInformationSet::setBoard
     setBitPattern(index,*board);
 }
 
-std::unique_ptr<std::pair<std::array<std::pair<ChessInformationSet::Square,bool>,16>,double>> ChessInformationSet::getBoard
+std::unique_ptr<std::pair<ChessInformationSet::ChessPiecesInformation,double>> ChessInformationSet::getBoard
 (
     const std::uint64_t index
 ) const
 {
-    std::unique_ptr<std::pair<std::array<std::pair<Square,bool>,16>,double>> board;
+    std::unique_ptr<std::pair<ChessPiecesInformation,double>> board;
     
     std::unique_ptr<std::bitset<chessInfoSize>> bits = getBitPattern(index);
     std::bitset<chessInfoSize> bitPattern = *bits;
@@ -58,19 +104,19 @@ std::unique_ptr<std::pair<std::array<std::pair<ChessInformationSet::Square,bool>
     return board;
 }
 
-std::unique_ptr<std::pair<std::array<std::pair<ChessInformationSet::Square,bool>,16>,double>> ChessInformationSet::decodeBoard
+std::unique_ptr<std::pair<ChessInformationSet::ChessPiecesInformation,double>> ChessInformationSet::decodeBoard
 (
     const std::bitset<chessInfoSize>& bits
 ) const
 {
-    auto board = std::make_unique<std::pair<std::array<std::pair<Square,bool>,16>,double>>();
+    auto board = std::make_unique<std::pair<ChessPiecesInformation,double>>();
         
     std::uint16_t prob16bit = transferBitPattern<std::uint16_t>(bits,0,16);
     double probability = prob16bit;
     probability /= std::numeric_limits<std::uint16_t>::max();
     board->second = probability;
     
-    std::array<std::pair<Square,bool>,16>& pieces = board->first;
+    std::array<std::pair<Square,bool>,16>& pieces = board->first.data;
 
     std::uint8_t bitInd=16;   
     std::uint8_t pieceInd=0;
@@ -86,7 +132,7 @@ std::unique_ptr<std::pair<std::array<std::pair<ChessInformationSet::Square,bool>
         
 std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard
 (
-    const std::array<std::pair<ChessInformationSet::Square,bool>,16>& pieces,
+    const ChessInformationSet::ChessPiecesInformation& piecesInfo,
     const double probability
 ) const
 {
@@ -99,6 +145,8 @@ std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard
     {
         bitBoard[bitInd] = getBit<std::uint16_t>(prob16bit,15-bitInd);
     }
+    
+    const std::array<std::pair<Square,bool>,16>& pieces = piecesInfo.data;
     
     std::uint8_t pieceInd=0;
     for(; pieceInd<16; pieceInd++, bitInd+=7)
@@ -128,8 +176,9 @@ void ChessInformationSet::markIncompatibleBoards
     std::vector<std::pair<PieceType,Square>>& knownPieces
 )
 {
-    auto squareMatch = [&](const std::array<std::pair<Square,bool>,16>& pieces, const Square& sq)
+    auto squareMatch = [&](const ChessPiecesInformation& piecesInfo, const Square& sq)
     {
+        const std::array<std::pair<Square,bool>,16>& pieces = piecesInfo.data;
         std::pair<bool,PieceType> match;
         for(std::uint8_t pieceInd=0; pieceInd<pieces.size(); pieceInd++)
         {
@@ -146,23 +195,23 @@ void ChessInformationSet::markIncompatibleBoards
         return match;
     };
     
-    std::unique_ptr<std::pair<std::array<std::pair<Square,bool>,16>,double>> board;
+    std::unique_ptr<std::pair<ChessPiecesInformation,double>> board;
     for(std::uint64_t infoSetIndex = 0; infoSetIndex<this->size(); infoSetIndex++)
     {
         bool incompatibleBoard = false;
         board = getBoard(infoSetIndex);
-        const std::array<std::pair<Square,bool>,16>& pieces = board->first;
+        const ChessPiecesInformation& piecesInfo = board->first;
         
         for(const Square& sq : noPieces)
         {
-            if(squareMatch(pieces,sq).first)
+            if(squareMatch(piecesInfo,sq).first)
             {
                 incompatibleBoard=true;
             }
         }        
         for(const Square& sq : unknownPieces)
         {
-            if(!squareMatch(pieces,sq).first)
+            if(!squareMatch(piecesInfo,sq).first)
             {
                 incompatibleBoard=true;
             }
@@ -171,7 +220,7 @@ void ChessInformationSet::markIncompatibleBoards
         {
             const Square& sq = pieceSq.second;
             const PieceType& pieceType = pieceSq.first;
-            std::pair<bool,PieceType> match = squareMatch(pieces,sq);
+            std::pair<bool,PieceType> match = squareMatch(piecesInfo,sq);
             if(!match.first || match.second!=pieceType)
             {
                 incompatibleBoard=true;

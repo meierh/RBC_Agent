@@ -54,12 +54,30 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             {
                 return column==other.column && row==other.row;
             }
+            typedef struct{
+                auto operator()(const Square &s) const -> size_t {
+                    return std::hash<ChessColumn>{}(s.column)^std::hash<ChessRow>{}(s.row);
+                }
+            }Hasher;
         };
         enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
                           rook1=8,knight1=9,bishop1=10,queen=11,king=12,bishop2=13,knight2=14,rook2=15};
         enum class PieceType {pawn=0,rook=1,knight=2,bishop=3,queen=4,king=5};
         
         PieceType boardIndexToPieceType(std::uint8_t boardIndex);
+        
+        class ChessPiecesInformation
+        {
+        public:
+            std::array<std::pair<Square,bool>,16> data;
+            
+            std::unique_ptr<std::array<std::pair<Square,bool>,8>> extractPawns() const;
+            std::unique_ptr<std::array<std::pair<Square,bool>,2>> extractRooks() const;
+            std::unique_ptr<std::array<std::pair<Square,bool>,2>> extractKnights() const;
+            std::unique_ptr<std::array<std::pair<Square,bool>,2>> extractBishops() const;
+            std::unique_ptr<std::array<std::pair<Square,bool>,1>> extractQueens() const;
+            std::unique_ptr<std::array<std::pair<Square,bool>,1>> extractKings() const;
+        };
         
         /**
          * Marks boards incompatible with observations
@@ -82,7 +100,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          * @param probability: probability of given board [0,1]
          * @param index: index of the given board in the infoSet
          */
-        void setBoard(const std::array<std::pair<Square,bool>,16> pieces, const double probability, const std::uint64_t index);
+        void setBoard(const ChessPiecesInformation& pieces, const double probability, const std::uint64_t index);
         
         /**
          * Gets the pieces in a given board
@@ -95,16 +113,16 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          *              (captured:false, not captured:true)
          *         probability of given board [0,1]
          */
-        std::unique_ptr<std::pair<std::array<std::pair<Square,bool>,16>,double>> getBoard(const std::uint64_t index) const;
+        std::unique_ptr<std::pair<ChessPiecesInformation,double>> getBoard(const std::uint64_t index) const;
         
-        std::unique_ptr<std::pair<std::array<std::pair<Square,bool>,16>,double>> decodeBoard
+        std::unique_ptr<std::pair<ChessPiecesInformation,double>> decodeBoard
         (
             const std::bitset<chessInfoSize>& bits
         ) const;
         
         std::unique_ptr<std::bitset<chessInfoSize>> encodeBoard
         (
-            const std::array<std::pair<Square,bool>,16>& pieces,
+            const ChessPiecesInformation& piecesInfo,
             const double probability
         ) const;
 
@@ -127,7 +145,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 IS_Iterator(cis),
                 cis(cis){};               
 
-                std::unique_ptr<std::pair<std::array<std::pair<Square,bool>,16>,double>> operator*() const noexcept
+                std::unique_ptr<std::pair<ChessPiecesInformation,double>> operator*() const noexcept
                 {
                     std::unique_ptr<std::bitset<chessInfoSize>> bits = IS_Iterator::operator*();
                     return cis->decodeBoard(*(IS_Iterator::operator*()));
