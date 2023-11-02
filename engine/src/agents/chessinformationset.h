@@ -32,6 +32,7 @@
 #include <queue>
 #include <limits>
 #include "informationset.h"
+#include <functional>
 
 namespace crazyara {
     
@@ -47,40 +48,46 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         enum class ChessRow {one=0,two=1,three=2,four=3,five=4,six=5,seven=6,eight=7};
         class Square
         {
-        public:
-            ChessColumn column;
-            ChessRow row;
-            bool operator==(const Square& other) const
-            {
-                return column==other.column && row==other.row;
-            }
-            typedef struct{
-                auto operator()(const Square &s) const -> size_t {
-                    return std::hash<ChessColumn>{}(s.column)^std::hash<ChessRow>{}(s.row);
+            public:
+                ChessColumn column;
+                ChessRow row;
+                bool operator==(const Square& other) const
+                {
+                    return column==other.column && row==other.row;
                 }
-            }Hasher;
-            
-            // general movement vectors
-            bool vertPlus(std::uint8_t multiple);
-            bool vertMinus(std::uint8_t multiple);
-            bool horizPlus(std::uint8_t multiple);
-            bool horizMinus(std::uint8_t multiple);
-            bool diagVertPlusHorizPlus(std::uint8_t multiple);
-            bool diagVertMinusHorizPlus(std::uint8_t multiple);
-            bool diagVertPlusHorizMinus(std::uint8_t multiple);
-            bool diagVertMinusHorizMinus(std::uint8_t multiple);
-            
-            // special knight moves
-            bool knightVertPlusHorizPlus();
-            bool knightVertPlusHorizMinus();
-            
-            bool knightVertPlusHorizPlus();
-            bool knightVertPlusHorizMinus();
-            
-            
-            bool diagVertMinusHorizPlus();
-            bool diagVertPlusHorizMinus();
-            bool diagVertMinusHorizMinus();            
+                typedef struct{
+                    auto operator()(const Square &s) const -> size_t {
+                        return std::hash<ChessColumn>{}(s.column)^std::hash<ChessRow>{}(s.row);
+                    }
+                }Hasher;
+                
+                // general movement vectors
+                bool vertPlus(std::uint8_t multiple);
+                bool vertMinus(std::uint8_t multiple);
+                bool horizPlus(std::uint8_t multiple);
+                bool horizMinus(std::uint8_t multiple);
+                bool diagVertPlusHorizPlus(std::uint8_t multiple);
+                bool diagVertMinusHorizPlus(std::uint8_t multiple);
+                bool diagVertPlusHorizMinus(std::uint8_t multiple);
+                bool diagVertMinusHorizMinus(std::uint8_t multiple);
+                
+                // special knight moves
+                bool knightVertPlusHorizPlus();
+                bool knightVertPlusHorizMinus();
+                
+                bool knightVertMinusHorizPlus();
+                bool knightVertMinusHorizMinus();
+                
+                bool knightHorizPlusVertPlus();
+                bool knightHorizPlusVertMinus();
+                
+                bool knightHorizMinusVertPlus();
+                bool knightHorizMinusVertMinus();
+                
+                bool validSquare(std::int8_t column, std::int8_t row);
+                
+            private:
+                bool moveSquare(std::int8_t deltaCol, std::int8_t deltaRow);                
         };
         enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
                           rook1=8,knight1=9,bishop1=10,queen=11,king=12,bishop2=13,knight2=14,rook2=15};
@@ -99,6 +106,10 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             std::unique_ptr<std::array<std::pair<Square,bool>,2>> extractBishops() const;
             std::unique_ptr<std::array<std::pair<Square,bool>,1>> extractQueens() const;
             std::unique_ptr<std::array<std::pair<Square,bool>,1>> extractKings() const;
+            std::function<bool(const Square&)> getBlockCheck();
+            
+        private:
+            std::unordered_map<Square,Piece,Square::Hasher> squareToPiece;
         };
         
         /**

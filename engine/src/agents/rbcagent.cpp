@@ -69,14 +69,18 @@ void RBCAgent::set_search_settings
 
 std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAgent::generateHypotheses
 (
-    const ChessInformationSet::ChessPiecesInformation& piecesOpponent,
-    const ChessInformationSet::ChessPiecesInformation& piecesSelf,
+    ChessInformationSet::ChessPiecesInformation& piecesOpponent,
+    ChessInformationSet::ChessPiecesInformation& piecesSelf,
     const RBCAgent::PieceColor selfColor
 ) const
 {
+    using CIS_Square = ChessInformationSet::Square;
     auto hypotheses = std::make_unique<std::vector<ChessInformationSet::ChessPiecesInformation>>();
     
-    auto pawnLegalMoves = [&](const ChessInformationSet::Square& sq)
+    std::function<bool(const CIS_Square&)> piecesSelfBlock = piecesSelf.getBlockCheck();
+    std::function<bool(const CIS_Square&)> piecesOppoBlock = piecesOpponent.getBlockCheck();
+    
+    auto pawnLegalMoves = [&](const CIS_Square& sq)
     {
         bool hasNotMoved=false;
         if(selfColor == PieceColor::White)
@@ -94,18 +98,294 @@ std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAge
                 hasNotMoved=true;
         }
         
-        auto legalDestinations = std::make_unique<std::vector<ChessInformationSet::Square>>();
-        
+        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
+        if(selfColor == PieceColor::White)
+        {
+            // Non capturing moves
+            CIS_Square oneForw(sq);
+            if(oneForw.vertPlus(1) && !piecesSelfBlock(oneForw) && !piecesOppoBlock(oneForw))
+            {
+                legalDestinations->push_back(oneForw);
+                if(hasNotMoved && oneForw.vertPlus(1) && !piecesSelfBlock(oneForw) && !piecesOppoBlock(oneForw))
+                    legalDestinations->push_back(oneForw);
+            }
+            
+            // Capturing moves
+            CIS_Square captu(sq);
+            if(captu.diagVertPlusHorizMinus(1) && piecesSelfBlock(captu))
+                legalDestinations->push_back(captu);
+            captu = sq;
+            if(captu.diagVertPlusHorizPlus(1) && piecesSelfBlock(captu))
+                legalDestinations->push_back(captu);
+        }
+        else
+        {
+            // Non capturing moves
+            CIS_Square oneForw(sq);
+            if(oneForw.vertMinus(1) && !piecesSelfBlock(oneForw) && !piecesOppoBlock(oneForw))
+            {
+                legalDestinations->push_back(oneForw);
+                if(hasNotMoved && oneForw.vertMinus(1) && !piecesSelfBlock(oneForw) && !piecesOppoBlock(oneForw))
+                    legalDestinations->push_back(oneForw);
+            }
+            
+            // Capturing moves
+            CIS_Square captu(sq);
+            if(captu.diagVertMinusHorizMinus(1) && piecesSelfBlock(captu))
+                legalDestinations->push_back(captu);
+            captu = sq;
+            if(captu.diagVertMinusHorizPlus(1) && piecesSelfBlock(captu))
+                legalDestinations->push_back(captu);
+        }
+        return legalDestinations;
     };
-    // pawn movement
+    auto rookLegalMoves = [&](const CIS_Square& sq)
+    {       
+        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
+        
+        std::array<CIS_Square,4> moveFront = {sq,sq,sq,sq};        
+        std::bitset<4> moveFrontBlocked(0000);
+        while(!moveFrontBlocked.all())
+        {
+            if(!moveFrontBlocked[0] && moveFront[0].vertPlus(1) && !piecesOppoBlock(moveFront[0]))
+            {
+                legalDestinations->push_back(moveFront[0]);
+                if(piecesSelfBlock(moveFront[0]))
+                    moveFrontBlocked[0]=true;
+            }
+            else
+                moveFrontBlocked[0]=true;
+
+            if(!moveFrontBlocked[1] && moveFront[1].vertMinus(1) && !piecesOppoBlock(moveFront[1]))
+            {
+                legalDestinations->push_back(moveFront[1]);
+                if(piecesSelfBlock(moveFront[1]))
+                    moveFrontBlocked[1]=true;
+            }
+            else
+                moveFrontBlocked[1]=true;
+          
+            if(!moveFrontBlocked[2] && moveFront[2].horizPlus(1) && !piecesOppoBlock(moveFront[2]))
+            {
+                legalDestinations->push_back(moveFront[2]);
+                if(piecesSelfBlock(moveFront[2]))
+                    moveFrontBlocked[2]=true;
+            }
+            else
+                moveFrontBlocked[2]=true;
+                
+            if(!moveFrontBlocked[3] && moveFront[3].horizMinus(1) && !piecesOppoBlock(moveFront[3]))
+            {
+                legalDestinations->push_back(moveFront[3]);
+                if(piecesSelfBlock(moveFront[3]))
+                    moveFrontBlocked[3]=true;
+            }
+            else
+                moveFrontBlocked[3]=true;
+        }
+        return legalDestinations;
+    };
+    auto knightLegalMoves = [&](const CIS_Square& sq)
+    {       
+        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
+        
+        std::array<CIS_Square,8> moveFront = {sq,sq,sq,sq,sq,sq,sq,sq};        
+
+        if(moveFront[0].knightVertPlusHorizPlus() && !piecesOppoBlock(moveFront[0]))
+            legalDestinations->push_back(moveFront[0]);
+
+        if(moveFront[1].knightVertPlusHorizMinus() && !piecesOppoBlock(moveFront[1]))
+            legalDestinations->push_back(moveFront[1]);
+        
+        if(moveFront[2].knightVertMinusHorizPlus() && !piecesOppoBlock(moveFront[2]))
+            legalDestinations->push_back(moveFront[2]);
+            
+        if(moveFront[3].knightVertMinusHorizMinus() && !piecesOppoBlock(moveFront[3]))
+            legalDestinations->push_back(moveFront[3]);
+        
+        if(moveFront[4].knightHorizPlusVertPlus() && !piecesOppoBlock(moveFront[4]))
+            legalDestinations->push_back(moveFront[4]);
+
+        if(moveFront[5].knightHorizPlusVertMinus() && !piecesOppoBlock(moveFront[5]))
+            legalDestinations->push_back(moveFront[5]);
+        
+        if(moveFront[6].knightHorizMinusVertPlus() && !piecesOppoBlock(moveFront[6]))
+            legalDestinations->push_back(moveFront[6]);
+            
+        if(moveFront[7].knightHorizMinusVertMinus() && !piecesOppoBlock(moveFront[7]))
+            legalDestinations->push_back(moveFront[7]);
+        
+        return legalDestinations;        
+    };
+    auto bishopLegalMoves = [&](const CIS_Square& sq)
+    {       
+        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
+        
+        std::array<CIS_Square,4> moveFront = {sq,sq,sq,sq};        
+        std::bitset<4> moveFrontBlocked(0000);
+        while(!moveFrontBlocked.all())
+        {
+            if(!moveFrontBlocked[0] && moveFront[0].diagVertPlusHorizPlus(1) && !piecesOppoBlock(moveFront[0]))
+            {
+                legalDestinations->push_back(moveFront[0]);
+                if(piecesSelfBlock(moveFront[0]))
+                    moveFrontBlocked[0]=true;
+            }
+            else
+                moveFrontBlocked[0]=true;
+
+            if(!moveFrontBlocked[1] && moveFront[1].diagVertMinusHorizPlus(1) && !piecesOppoBlock(moveFront[1]))
+            {
+                legalDestinations->push_back(moveFront[1]);
+                if(piecesSelfBlock(moveFront[1]))
+                    moveFrontBlocked[1]=true;
+            }
+            else
+                moveFrontBlocked[1]=true;
+          
+            if(!moveFrontBlocked[2] && moveFront[2].diagVertPlusHorizMinus(1) && !piecesOppoBlock(moveFront[2]))
+            {
+                legalDestinations->push_back(moveFront[2]);
+                if(piecesSelfBlock(moveFront[2]))
+                    moveFrontBlocked[2]=true;
+            }
+            else
+                moveFrontBlocked[2]=true;
+                
+            if(!moveFrontBlocked[3] && moveFront[3].diagVertMinusHorizMinus(1) && !piecesOppoBlock(moveFront[3]))
+            {
+                legalDestinations->push_back(moveFront[3]);
+                if(piecesSelfBlock(moveFront[3]))
+                    moveFrontBlocked[3]=true;
+            }
+            else
+                moveFrontBlocked[3]=true;
+        }
+        return legalDestinations;
+    };
+    auto queenLegalMoves = [&](const CIS_Square& sq)
+    {       
+        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
+        
+        std::array<CIS_Square,8> moveFront = {sq,sq,sq,sq,sq,sq,sq,sq};        
+        std::bitset<8> moveFrontBlocked(00000000);
+        while(!moveFrontBlocked.all())
+        {
+            if(!moveFrontBlocked[0] && moveFront[0].vertPlus(1) && !piecesOppoBlock(moveFront[0]))
+            {
+                legalDestinations->push_back(moveFront[0]);
+                if(piecesSelfBlock(moveFront[0]))
+                    moveFrontBlocked[0]=true;
+            }
+            else
+                moveFrontBlocked[0]=true;
+
+            if(!moveFrontBlocked[1] && moveFront[1].vertMinus(1) && !piecesOppoBlock(moveFront[1]))
+            {
+                legalDestinations->push_back(moveFront[1]);
+                if(piecesSelfBlock(moveFront[1]))
+                    moveFrontBlocked[1]=true;
+            }
+            else
+                moveFrontBlocked[1]=true;
+          
+            if(!moveFrontBlocked[2] && moveFront[2].horizPlus(1) && !piecesOppoBlock(moveFront[2]))
+            {
+                legalDestinations->push_back(moveFront[2]);
+                if(piecesSelfBlock(moveFront[2]))
+                    moveFrontBlocked[2]=true;
+            }
+            else
+                moveFrontBlocked[2]=true;
+                
+            if(!moveFrontBlocked[3] && moveFront[3].horizMinus(1) && !piecesOppoBlock(moveFront[3]))
+            {
+                legalDestinations->push_back(moveFront[3]);
+                if(piecesSelfBlock(moveFront[3]))
+                    moveFrontBlocked[3]=true;
+            }
+            else
+                moveFrontBlocked[3]=true;
+            
+            if(!moveFrontBlocked[4] && moveFront[4].diagVertPlusHorizPlus(1) && !piecesOppoBlock(moveFront[4]))
+            {
+                legalDestinations->push_back(moveFront[4]);
+                if(piecesSelfBlock(moveFront[4]))
+                    moveFrontBlocked[4]=true;
+            }
+            else
+                moveFrontBlocked[4]=true;
+
+            if(!moveFrontBlocked[5] && moveFront[5].diagVertMinusHorizPlus(1) && !piecesOppoBlock(moveFront[5]))
+            {
+                legalDestinations->push_back(moveFront[5]);
+                if(piecesSelfBlock(moveFront[5]))
+                    moveFrontBlocked[5]=true;
+            }
+            else
+                moveFrontBlocked[5]=true;
+          
+            if(!moveFrontBlocked[6] && moveFront[6].diagVertPlusHorizMinus(1) && !piecesOppoBlock(moveFront[6]))
+            {
+                legalDestinations->push_back(moveFront[6]);
+                if(piecesSelfBlock(moveFront[6]))
+                    moveFrontBlocked[6]=true;
+            }
+            else
+                moveFrontBlocked[6]=true;
+                
+            if(!moveFrontBlocked[7] && moveFront[7].diagVertMinusHorizMinus(1) && !piecesOppoBlock(moveFront[7]))
+            {
+                legalDestinations->push_back(moveFront[7]);
+                if(piecesSelfBlock(moveFront[7]))
+                    moveFrontBlocked[7]=true;
+            }
+            else
+                moveFrontBlocked[7]=true;
+        }
+        return legalDestinations;
+    };
+    auto kingLegalMoves = [&](const CIS_Square& sq)
+    {       
+        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
+        
+        std::array<CIS_Square,8> moveFront = {sq,sq,sq,sq,sq,sq,sq,sq};        
+
+        if(moveFront[0].vertPlus(1) && !piecesOppoBlock(moveFront[0]))
+            legalDestinations->push_back(moveFront[0]);
+
+        if(moveFront[1].vertMinus(1) && !piecesOppoBlock(moveFront[1]))
+            legalDestinations->push_back(moveFront[1]);
+        
+        if(moveFront[2].horizPlus(1) && !piecesOppoBlock(moveFront[2]))
+            legalDestinations->push_back(moveFront[2]);
+            
+        if(moveFront[3].horizMinus(1) && !piecesOppoBlock(moveFront[3]))
+            legalDestinations->push_back(moveFront[3]);
+        
+        if(moveFront[4].diagVertPlusHorizPlus(1) && !piecesOppoBlock(moveFront[4]))
+            legalDestinations->push_back(moveFront[4]);
+
+        if(moveFront[5].diagVertMinusHorizPlus(1) && !piecesOppoBlock(moveFront[5]))
+            legalDestinations->push_back(moveFront[5]);
+        
+        if(moveFront[6].diagVertPlusHorizMinus(1) && !piecesOppoBlock(moveFront[6]))
+            legalDestinations->push_back(moveFront[6]);
+            
+        if(moveFront[7].diagVertMinusHorizMinus(1) && !piecesOppoBlock(moveFront[7]))
+            legalDestinations->push_back(moveFront[7]);
+        
+        return legalDestinations;
+    };
+    
     
     return hypotheses;
 }
 
 std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAgent::generateHypotheses
 (
-    const ChessInformationSet::ChessPiecesInformation& piecesOpponent
-) const
+    ChessInformationSet::ChessPiecesInformation& piecesOpponent
+)
 {
     return generateHypotheses(piecesOpponent,this->playerPiecesTracker,this->selfColor);
 }

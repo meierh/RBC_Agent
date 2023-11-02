@@ -77,6 +77,21 @@ std::unique_ptr<std::array<std::pair<ChessInformationSet::Square,bool>,1>> Chess
     return res;
 };
 
+std::function<bool(const ChessInformationSet::Square&)> ChessInformationSet::ChessPiecesInformation::getBlockCheck()
+{
+    squareToPiece.clear();
+    for(std::uint8_t i=0; i<data.size(); i++)
+    {
+        const std::pair<Square,bool>& piece = data[i];
+        if(piece.second)
+        {
+            squareToPiece[piece.first] = static_cast<Piece>(i);
+        }
+    }
+    return [&](const Square& sq){return this->squareToPiece.find(sq)!=this->squareToPiece.end();};
+}
+
+
 void ChessInformationSet::setBoard
 (
     const ChessInformationSet::ChessPiecesInformation& pieces,
@@ -230,4 +245,47 @@ void ChessInformationSet::markIncompatibleBoards
     }
 }
 
+bool ChessInformationSet::Square::vertPlus(std::uint8_t multiple) {return moveSquare(0,multiple);}
+bool ChessInformationSet::Square::vertMinus(std::uint8_t multiple){return moveSquare(0,-multiple);}
+
+bool ChessInformationSet::Square::horizPlus(std::uint8_t multiple){return moveSquare(multiple,0);}
+bool ChessInformationSet::Square::horizMinus(std::uint8_t multiple){return moveSquare(-multiple,0);}
+
+bool ChessInformationSet::Square::diagVertPlusHorizPlus(std::uint8_t multiple){return moveSquare(multiple,multiple);}
+bool ChessInformationSet::Square::diagVertMinusHorizPlus(std::uint8_t multiple){return moveSquare(multiple,-multiple);}
+bool ChessInformationSet::Square::diagVertPlusHorizMinus(std::uint8_t multiple){return moveSquare(-multiple,multiple);}
+bool ChessInformationSet::Square::diagVertMinusHorizMinus(std::uint8_t multiple){return moveSquare(-multiple,-multiple);}
+
+bool ChessInformationSet::Square::knightVertPlusHorizPlus(){return moveSquare(1,2);}
+bool ChessInformationSet::Square::knightVertPlusHorizMinus(){return moveSquare(-1,2);}
+bool ChessInformationSet::Square::knightVertMinusHorizPlus(){return moveSquare(1,-2);}
+bool ChessInformationSet::Square::knightVertMinusHorizMinus(){return moveSquare(-1,-2);}
+bool ChessInformationSet::Square::knightHorizPlusVertPlus(){return moveSquare(2,1);}
+bool ChessInformationSet::Square::knightHorizPlusVertMinus(){return moveSquare(2,-1);}
+bool ChessInformationSet::Square::knightHorizMinusVertPlus(){return moveSquare(-2,1);}
+bool ChessInformationSet::Square::knightHorizMinusVertMinus(){return moveSquare(-2,-1);}
+
+bool ChessInformationSet::Square::validSquare(std::int8_t column, std::int8_t row)
+{
+    return (column>=0 && column<8 && row>=0 && row<8);
+}
+
+bool ChessInformationSet::Square::moveSquare(std::int8_t deltaCol, std::int8_t deltaRow)
+{
+    std::int8_t col = static_cast<std::int8_t>(this->column);
+    std::int8_t row = static_cast<std::int8_t>(this->row);
+
+    col+=deltaCol;
+    row+=deltaRow;
+    
+    if(!validSquare(col,row))
+        return false;
+    
+    std::uint8_t ucol = static_cast<std::uint8_t>(col);
+    std::uint8_t urow = static_cast<std::uint8_t>(row);
+    
+    this->column = static_cast<ChessColumn>(ucol);
+    this->row = static_cast<ChessRow>(urow);
+    return true;
+}
 }

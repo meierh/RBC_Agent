@@ -106,8 +106,8 @@ public:
      */
     std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> generateHypotheses
     (
-        const ChessInformationSet::ChessPiecesInformation& piecesOpponent,
-        const ChessInformationSet::ChessPiecesInformation& piecesSelf,
+        ChessInformationSet::ChessPiecesInformation& piecesOpponent,
+        ChessInformationSet::ChessPiecesInformation& piecesSelf,
         const PieceColor selfColor
     ) const;
 
@@ -119,8 +119,8 @@ private:
      */
     std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> generateHypotheses
     (
-        const ChessInformationSet::ChessPiecesInformation& piecesOpponent
-    ) const;
+        ChessInformationSet::ChessPiecesInformation& piecesOpponent
+    );
     
     /**
      * @brief
