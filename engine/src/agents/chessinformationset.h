@@ -120,6 +120,10 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          */
         void markIncompatibleBoards(std::vector<Square>& noPieces, std::vector<Square>& unknownPieces, std::vector<std::pair<PieceType,Square>>& knownPieces);
         
+        void add(const ChessPiecesInformation& item, double probability);
+        
+        void add(const std::vector<std::pair<ChessPiecesInformation,double>>& items);
+        
         ChessInformationSet();        
     protected:
         /**

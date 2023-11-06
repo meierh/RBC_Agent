@@ -75,12 +75,14 @@ std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAge
 ) const
 {
     using CIS_Square = ChessInformationSet::Square;
-    auto hypotheses = std::make_unique<std::vector<ChessInformationSet::ChessPiecesInformation>>();
+    using CIS_CPI = ChessInformationSet::ChessPiecesInformation;
+    auto hypotheses = std::make_unique<std::vector<CIS_CPI>>();
     
     std::function<bool(const CIS_Square&)> piecesSelfBlock = piecesSelf.getBlockCheck();
     std::function<bool(const CIS_Square&)> piecesOppoBlock = piecesOpponent.getBlockCheck();
     
-    auto pawnLegalMoves = [&](const CIS_Square& sq)
+    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
+    pawnLegalMoves = [&](const CIS_Square& sq)
     {
         bool hasNotMoved=false;
         if(selfColor == PieceColor::White)
@@ -139,7 +141,9 @@ std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAge
         }
         return legalDestinations;
     };
-    auto rookLegalMoves = [&](const CIS_Square& sq)
+    
+    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
+    rookLegalMoves = [&](const CIS_Square& sq)
     {       
         auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
         
@@ -185,7 +189,9 @@ std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAge
         }
         return legalDestinations;
     };
-    auto knightLegalMoves = [&](const CIS_Square& sq)
+
+    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
+    knightLegalMoves = [&](const CIS_Square& sq)
     {       
         auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
         
@@ -217,7 +223,9 @@ std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAge
         
         return legalDestinations;        
     };
-    auto bishopLegalMoves = [&](const CIS_Square& sq)
+    
+    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
+    bishopLegalMoves = [&](const CIS_Square& sq)
     {       
         auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
         
@@ -263,7 +271,9 @@ std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAge
         }
         return legalDestinations;
     };
-    auto queenLegalMoves = [&](const CIS_Square& sq)
+    
+    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
+    queenLegalMoves = [&](const CIS_Square& sq)
     {       
         auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
         
@@ -345,7 +355,9 @@ std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAge
         }
         return legalDestinations;
     };
-    auto kingLegalMoves = [&](const CIS_Square& sq)
+    
+    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
+    kingLegalMoves = [&](const CIS_Square& sq)
     {       
         auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
         
@@ -378,6 +390,35 @@ std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAge
         return legalDestinations;
     };
     
+    //hypotheses for every figure movement
+    for(std::uint8_t pieceInd=0; pieceInd<piecesOpponent.data.size(); pieceInd++)
+    {
+        const std::pair<CIS_Square,bool>& onePiece = piecesOpponent.data[pieceInd];
+        if(onePiece.second)
+        {
+            std::unique_ptr<std::vector<CIS_Square>> posMoves;
+            if(pieceInd<8)
+                posMoves = pawnLegalMoves(onePiece.first);
+            else if(pieceInd==8 || pieceInd==15)
+                posMoves = rookLegalMoves(onePiece.first);
+            else if(pieceInd==9 || pieceInd==14)
+                posMoves = knightLegalMoves(onePiece.first);
+            else if(pieceInd==10 || pieceInd==13)
+                posMoves = bishopLegalMoves(onePiece.first);
+            else if(pieceInd==11)
+                posMoves = queenLegalMoves(onePiece.first);
+            else if(pieceInd==12)
+                posMoves = kingLegalMoves(onePiece.first);
+        
+            std::vector<CIS_CPI> onePieceHypotheses(posMoves->size());
+            for(unsigned int moveInd=0;moveInd<posMoves->size();moveInd++)
+            {
+                onePieceHypotheses[moveInd] = piecesOpponent;
+                onePieceHypotheses[moveInd].data[pieceInd].first = (*posMoves)[moveInd];
+            }
+            hypotheses->insert(hypotheses->end(),onePieceHypotheses.begin(),onePieceHypotheses.end());
+        }
+    } 
     
     return hypotheses;
 }
@@ -526,17 +567,3 @@ ChessInformationSet::Square RBCAgent::applyScanAction
 {
     return {ChessInformationSet::ChessColumn::A,ChessInformationSet::ChessRow::one}; // dummy
 }
-
-
-
-/*
-string RBCAgent::get_name() const
-{
-    return MCTSAgentBatch::get_name();
-}
-
-void RBCAgent::evaluate_board_state()
-{
-    MCTSAgentBatch::evaluate_board_state();
-}
-*/

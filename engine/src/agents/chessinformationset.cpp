@@ -184,6 +184,25 @@ std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard
     return bits;
 }
 
+void ChessInformationSet::add
+(
+    const ChessInformationSet::ChessPiecesInformation& item,
+    double probability
+)
+{
+    std::unique_ptr<std::bitset<chessInfoSize>> bits = encodeBoard(item,probability);
+    InformationSet<chessInfoSize>::add(*bits);
+};
+        
+void ChessInformationSet::add
+(
+    const std::vector<std::pair<ChessInformationSet::ChessPiecesInformation,double>>& items
+)
+{
+    for(const std::pair<ChessPiecesInformation,double>& item : items)
+        add(item.first,item.second);
+}
+
 void ChessInformationSet::markIncompatibleBoards
 (
     std::vector<Square>& noPieces,
