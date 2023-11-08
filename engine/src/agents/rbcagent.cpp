@@ -437,11 +437,109 @@ std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
     const Player side  
 ) const
 {
-    auto obs = std::make_unique<ChessPiecesObservation>();
+    float* inputPlanes;
+    pos->get_state_planes(true,inputPlanes,1);
     
-    // decode here
+    std::function<ChessInformationSet::Square(std::uint8_t index)> indexToSquare;
+    indexToSquare = [](std::uint8_t index)
+    {
+        std::uint8_t x = index / 8;
+        std::uint8_t y = index % 8;
+        ChessInformationSet::Square sq;
+        sq.column = static_cast<ChessInformationSet::ChessColumn>(x);
+        sq.row = static_cast<ChessInformationSet::ChessRow>(y);
+        return sq;
+    };
     
-    return obs;
+    std::uint16_t offset = 0;
+    
+    std::array<std::unique_ptr<ChessPiecesObservation>,2> obs;
+    obs[0] = std::make_unique<ChessPiecesObservation>(); //white
+    obs[1] = std::make_unique<ChessPiecesObservation>(); //black
+    
+    for(std::uint16_t color=0; color<obs.size(); color++)
+    {
+        std::array<float,64> pawns;
+        std::memcpy(pawns.data(),pos+offset,64);
+        for(unsigned int index=0; index<pawns.size(); index++)
+        {
+            if(pawns[index]>0.5)
+            {
+                obs[color]->pawns.push_back(indexToSquare(index));
+            }
+        }
+        if(obs[color]->pawns.size()>8)
+            std::logic_error("Can not have more than 8 pawns");
+        offset+=64;
+
+        
+        std::array<float,64> knights;
+        std::memcpy(knights.data(),pos+offset,64);
+        for(unsigned int index=0; index<knights.size(); index++)
+        {
+            if(knights[index]>0.5)
+            {
+                obs[color]->knights.push_back(indexToSquare(index));
+            }
+        }
+        if(obs[color]->knights.size()>2)
+            std::logic_error("Can not have more than 2 knights");
+        offset+=64;
+        
+        std::array<float,64> bishops;
+        std::memcpy(bishops.data(),pos+offset,64);
+        for(unsigned int index=0; index<bishops.size(); index++)
+        {
+            if(bishops[index]>0.5)
+            {
+                obs[color]->bishops.push_back(indexToSquare(index));
+            }
+        }
+        if(obs[color]->bishops.size()>2)
+            std::logic_error("Can not have more than 2 bishops");
+        offset+=64;
+        
+        std::array<float,64> rooks;
+        std::memcpy(rooks.data(),pos+offset,64);
+        for(unsigned int index=0; index<rooks.size(); index++)
+        {
+            if(rooks[index]>0.5)
+            {
+                obs[color]->rooks.push_back(indexToSquare(index));
+            }
+        }
+        if(obs[color]->rooks.size()>2)
+            std::logic_error("Can not have more than 2 rooks");
+        offset+=64;
+        
+        std::array<float,64> queens;
+        std::memcpy(queens.data(),pos+offset,64);
+        for(unsigned int index=0; index<queens.size(); index++)
+        {
+            if(queens[index]>0.5)
+            {
+                obs[color]->queens.push_back(indexToSquare(index));
+            }
+        }
+        if(obs[color]->queens.size()>1)
+            std::logic_error("Can not have more than 1 queens");
+        offset+=64;
+        
+        std::array<float,64> kings;
+        std::memcpy(kings.data(),pos+offset,64);
+        for(unsigned int index=0; index<kings.size(); index++)
+        {
+            if(kings[index]>0.5)
+            {
+                obs[color]->kings.push_back(indexToSquare(index));
+            }
+        }
+        if(obs[color]->kings.size()>1)
+            std::logic_error("Can not have more than 1 kings");
+        offset+=64;
+    }
+    
+    //obsWhite;
 }
 
 void RBCAgent::handleOpponentMoveInfo
