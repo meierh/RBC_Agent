@@ -36,7 +36,11 @@
 
 namespace crazyara {
     
-constexpr std::uint64_t chessInfoSize=128;
+constexpr std::uint64_t chessInfoSize= 6*64 + // pieces {pawn,knight,bishop,rook,queen,king}
+                                       2*1 +  // castling legal {kingside, queenside}
+                                       1*64 + // en-passent allowed
+                                       7 +  // number of moves for 50-moves rule
+                                       7; // probability
 
 /**
  * @brief The ChessInformationSet class defines a information set to store a chess game state.
@@ -91,25 +95,59 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         };
         enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
                           rook1=8,knight1=9,bishop1=10,queen=11,king=12,bishop2=13,knight2=14,rook2=15};
-        enum class PieceType {pawn=0,rook=1,knight=2,bishop=3,queen=4,king=5};
+        enum class PieceType {pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5};
         
         PieceType boardIndexToPieceType(std::uint8_t boardIndex);
         
-        class ChessPiecesInformation
+        static Square boardIndexToSquare(std::uint8_t index)
         {
-        public:
-            std::array<std::pair<Square,bool>,16> data;
-            
-            std::unique_ptr<std::array<std::pair<Square,bool>,8>> extractPawns() const;
-            std::unique_ptr<std::array<std::pair<Square,bool>,2>> extractRooks() const;
-            std::unique_ptr<std::array<std::pair<Square,bool>,2>> extractKnights() const;
-            std::unique_ptr<std::array<std::pair<Square,bool>,2>> extractBishops() const;
-            std::unique_ptr<std::array<std::pair<Square,bool>,1>> extractQueens() const;
-            std::unique_ptr<std::array<std::pair<Square,bool>,1>> extractKings() const;
-            std::function<bool(const Square&)> getBlockCheck();
-            
-        private:
-            std::unordered_map<Square,Piece,Square::Hasher> squareToPiece;
+            std::uint8_t x = index / 8; //column {A-H}
+            std::uint8_t y = index % 8; //row {1-8}
+            ChessInformationSet::Square sq;
+            sq.column = static_cast<ChessInformationSet::ChessColumn>(x);
+            sq.row = static_cast<ChessInformationSet::ChessRow>(y);
+            return sq;
+        }
+        
+        static std::uint8_t squareToBoardIndex(Square sq)
+        {
+            std::uint8_t x = static_cast<std::uint8_t>(sq.column); //column {A-H}
+            std::uint8_t y = static_cast<std::uint8_t>(sq.row); //row {1-8}
+            return x*8+y;
+        }
+        
+        class OnePlayerChessInfo
+        {
+            public:
+                // list of all squares with pieces
+                std::vector<ChessInformationSet::Square> pawns;
+                std::vector<ChessInformationSet::Square> knights;
+                std::vector<ChessInformationSet::Square> bishops;
+                std::vector<ChessInformationSet::Square> rooks;
+                std::vector<ChessInformationSet::Square> queens;
+                std::vector<ChessInformationSet::Square> kings;
+                
+                // castling legal
+                bool kingside;
+                bool queenside;
+                
+                // en-passent legal
+                std::vector<ChessInformationSet::Square> en_passent;
+                
+                // fifty move rule counter
+                std::uint8_t no_progress_count;
+
+                std::function<bool(const Square&)> getBlockCheck();
+                std::function<bool(const Square&)> getBlockCheck
+                (
+                    const std::vector<ChessInformationSet::Square>& onePieceType,
+                    const PieceType pT
+                );
+                
+                std::function<std::pair<bool,PieceType>(Square)> getSquarePieceTypeCheck();
+                
+            private:
+                std::unordered_map<Square,PieceType,Square::Hasher> squareToPieceMap;
         };
         
         /**
@@ -120,9 +158,9 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          */
         void markIncompatibleBoards(std::vector<Square>& noPieces, std::vector<Square>& unknownPieces, std::vector<std::pair<PieceType,Square>>& knownPieces);
         
-        void add(const ChessPiecesInformation& item, double probability);
+        void add(OnePlayerChessInfo& item, double probability);
         
-        void add(const std::vector<std::pair<ChessPiecesInformation,double>>& items);
+        void add(std::vector<std::pair<OnePlayerChessInfo,double>>& items);
         
         ChessInformationSet();        
     protected:
@@ -137,7 +175,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          * @param probability: probability of given board [0,1]
          * @param index: index of the given board in the infoSet
          */
-        void setBoard(const ChessPiecesInformation& pieces, const double probability, const std::uint64_t index);
+        void setBoard(OnePlayerChessInfo& pieces, double probability, std::uint64_t index);
         
         /**
          * Gets the pieces in a given board
@@ -150,17 +188,17 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          *              (captured:false, not captured:true)
          *         probability of given board [0,1]
          */
-        std::unique_ptr<std::pair<ChessPiecesInformation,double>> getBoard(const std::uint64_t index) const;
+        std::unique_ptr<std::pair<OnePlayerChessInfo,double>> getBoard(const std::uint64_t index) const;
         
-        std::unique_ptr<std::pair<ChessPiecesInformation,double>> decodeBoard
+        std::unique_ptr<std::pair<OnePlayerChessInfo,double>> decodeBoard
         (
             const std::bitset<chessInfoSize>& bits
         ) const;
         
         std::unique_ptr<std::bitset<chessInfoSize>> encodeBoard
         (
-            const ChessPiecesInformation& piecesInfo,
-            const double probability
+            OnePlayerChessInfo& piecesInfo,
+            double probability
         ) const;
 
         
@@ -182,7 +220,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 IS_Iterator(cis),
                 cis(cis){};               
 
-                std::unique_ptr<std::pair<ChessPiecesInformation,double>> operator*() const noexcept
+                std::unique_ptr<std::pair<OnePlayerChessInfo,double>> operator*() const noexcept
                 {
                     std::unique_ptr<std::bitset<chessInfoSize>> bits = IS_Iterator::operator*();
                     return cis->decodeBoard(*(IS_Iterator::operator*()));

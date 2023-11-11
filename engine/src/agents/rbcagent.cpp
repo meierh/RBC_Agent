@@ -67,17 +67,18 @@ void RBCAgent::set_search_settings
     MCTSAgentBatch::set_search_settings(pos,searchLimits,evalInfo);
 }
 
-std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAgent::generateHypotheses
+std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::generateHypotheses
 (
-    ChessInformationSet::ChessPiecesInformation& piecesOpponent,
-    ChessInformationSet::ChessPiecesInformation& piecesSelf,
+    ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
+    ChessInformationSet::OnePlayerChessInfo& piecesSelf,
     const RBCAgent::PieceColor selfColor
 ) const
 {
     using CIS_Square = ChessInformationSet::Square;
-    using CIS_CPI = ChessInformationSet::ChessPiecesInformation;
+    using CIS_CPI = ChessInformationSet::OnePlayerChessInfo;
     auto hypotheses = std::make_unique<std::vector<CIS_CPI>>();
     
+    /*
     std::function<bool(const CIS_Square&)> piecesSelfBlock = piecesSelf.getBlockCheck();
     std::function<bool(const CIS_Square&)> piecesOppoBlock = piecesOpponent.getBlockCheck();
     
@@ -419,43 +420,34 @@ std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAge
             hypotheses->insert(hypotheses->end(),onePieceHypotheses.begin(),onePieceHypotheses.end());
         }
     } 
+    */
     
     return hypotheses;
 }
 
-std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> RBCAgent::generateHypotheses
+std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::generateHypotheses
 (
-    ChessInformationSet::ChessPiecesInformation& piecesOpponent
+    ChessInformationSet::OnePlayerChessInfo& piecesOpponent
 )
 {
     return generateHypotheses(piecesOpponent,this->playerPiecesTracker,this->selfColor);
 }
 
-std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
+std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,ChessInformationSet::OnePlayerChessInfo>> RBCAgent::getDecodedStatePlane
 (
-    StateObj *pos,
-    const Player side  
+    StateObj *pos
 ) const
 {
+    using CIS = ChessInformationSet;
+    
     float* inputPlanes;
     pos->get_state_planes(true,inputPlanes,1);
     
-    std::function<ChessInformationSet::Square(std::uint8_t index)> indexToSquare;
-    indexToSquare = [](std::uint8_t index)
-    {
-        std::uint8_t x = index / 8;
-        std::uint8_t y = index % 8;
-        ChessInformationSet::Square sq;
-        sq.column = static_cast<ChessInformationSet::ChessColumn>(x);
-        sq.row = static_cast<ChessInformationSet::ChessRow>(y);
-        return sq;
-    };
-    
-    std::uint16_t offset = 0;
-    
-    std::array<std::unique_ptr<ChessPiecesObservation>,2> obs;
-    obs[0] = std::make_unique<ChessPiecesObservation>(); //white
-    obs[1] = std::make_unique<ChessPiecesObservation>(); //black
+    std::uint16_t offset = 0;    
+    auto info = std::make_unique<std::pair<ChessInformationSet::OnePlayerChessInfo,ChessInformationSet::OnePlayerChessInfo>>();
+    ChessInformationSet::OnePlayerChessInfo& whiteInfo = info->first;
+    ChessInformationSet::OnePlayerChessInfo& blackInfo = info->second;
+    std::array<CIS::OnePlayerChessInfo*,2> obs = {&whiteInfo,&blackInfo};
     
     for(std::uint16_t color=0; color<obs.size(); color++)
     {
@@ -465,7 +457,7 @@ std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
         {
             if(pawns[index]>0.5)
             {
-                obs[color]->pawns.push_back(indexToSquare(index));
+                obs[color]->pawns.push_back(CIS::boardIndexToSquare(index));
             }
         }
         if(obs[color]->pawns.size()>8)
@@ -479,7 +471,7 @@ std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
         {
             if(knights[index]>0.5)
             {
-                obs[color]->knights.push_back(indexToSquare(index));
+                obs[color]->knights.push_back(CIS::boardIndexToSquare(index));
             }
         }
         if(obs[color]->knights.size()>2)
@@ -492,7 +484,7 @@ std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
         {
             if(bishops[index]>0.5)
             {
-                obs[color]->bishops.push_back(indexToSquare(index));
+                obs[color]->bishops.push_back(CIS::boardIndexToSquare(index));
             }
         }
         if(obs[color]->bishops.size()>2)
@@ -505,7 +497,7 @@ std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
         {
             if(rooks[index]>0.5)
             {
-                obs[color]->rooks.push_back(indexToSquare(index));
+                obs[color]->rooks.push_back(CIS::boardIndexToSquare(index));
             }
         }
         if(obs[color]->rooks.size()>2)
@@ -518,7 +510,7 @@ std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
         {
             if(queens[index]>0.5)
             {
-                obs[color]->queens.push_back(indexToSquare(index));
+                obs[color]->queens.push_back(CIS::boardIndexToSquare(index));
             }
         }
         if(obs[color]->queens.size()>1)
@@ -531,7 +523,7 @@ std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
         {
             if(kings[index]>0.5)
             {
-                obs[color]->kings.push_back(indexToSquare(index));
+                obs[color]->kings.push_back(CIS::boardIndexToSquare(index));
             }
         }
         if(obs[color]->kings.size()>1)
@@ -539,7 +531,51 @@ std::unique_ptr<RBCAgent::ChessPiecesObservation> RBCAgent::getDecodedStatePlane
         offset+=64;
     }
     
-    //obsWhite;
+    offset += 2*64;  // repetitions 1&2
+    offset += 5*64;  // white pocket pieces
+    offset += 5*64;  // black pocket pieces
+    offset += 2*64;  // white&black promotions
+    
+    std::array<float,64> en_passant;
+    std::memcpy(en_passant.data(),pos+offset,64);
+    // Decode en_passent here
+    
+    offset += 1*64;  // turn color
+    offset += 1*64;  // total move communication
+    
+    for(std::uint16_t color=0; color<obs.size(); color++)
+    {        
+        std::array<float,64> castle_king_side;
+        std::memcpy(castle_king_side.data(),pos+offset,64);
+        if(castle_king_side[0]>0.5)
+        {
+            obs[color]->kingside=true;
+        }
+        else
+        {
+            obs[color]->kingside=false;
+        }
+        offset+=64;
+        
+        std::array<float,64> castle_queen_side;
+        std::memcpy(castle_queen_side.data(),pos+offset,64);
+        if(castle_queen_side[0]>0.5)
+        {
+            obs[color]->queenside=true;
+        }
+        else
+        {
+            obs[color]->queenside=false;
+        }
+        offset+=64;
+    }
+    
+    std::array<float,64> no_progress_count;
+    std::memcpy(no_progress_count.data(),pos+offset,64);
+    obs[0]->no_progress_count=static_cast<std::uint8_t>(no_progress_count[0]);
+    obs[1]->no_progress_count=static_cast<std::uint8_t>(no_progress_count[0]);
+    
+    return info;
 }
 
 void RBCAgent::handleOpponentMoveInfo
@@ -548,6 +584,8 @@ void RBCAgent::handleOpponentMoveInfo
 )
 {
     std::vector<ChessInformationSet::Square> captureSquares;
+    
+    /*
     std::unique_ptr<ChessPiecesObservation> ownPiecesObs = getDecodedStatePlane(pos,Player::Self);
     std::unordered_map<std::uint8_t,std::vector<ChessInformationSet::Square>*> comparisonSet = 
     {
@@ -558,8 +596,10 @@ void RBCAgent::handleOpponentMoveInfo
         {11,&(ownPiecesObs->queens)},
         {12,&(ownPiecesObs->kings)}
     };
+    */
     
     // Test for captured pawns
+    /*
     for(unsigned int i=0; i<16; i++) 
     {
         std::pair<ChessInformationSet::Square,bool>& onePiece = playerPiecesTracker.data[i];
@@ -579,6 +619,7 @@ void RBCAgent::handleOpponentMoveInfo
             }
         }
     }
+    */
     
     if(captureSquares.size()>1)
     {
@@ -598,6 +639,7 @@ void RBCAgent::handleScanInfo
     ChessInformationSet::Square scanCenter
 )
 {
+    /*
     std::unique_ptr<ChessPiecesObservation> opponentPiecesObs = getDecodedStatePlane(pos,Player::Opponent);
     
     std::unordered_set<ChessInformationSet::Square,ChessInformationSet::Square::Hasher> scannedSquares;
@@ -656,6 +698,7 @@ void RBCAgent::handleScanInfo
     }
     
     cis.markIncompatibleBoards(noPieces,unknownPieces,knownPieces);
+    */
 }
 
 ChessInformationSet::Square RBCAgent::applyScanAction

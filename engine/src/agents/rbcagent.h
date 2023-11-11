@@ -50,22 +50,14 @@ using namespace crazyara;
 
 class RBCAgent : public MCTSAgentBatch
 {
+    using CIS = ChessInformationSet;
+    
 private:   
-    class ChessPiecesObservation
-    {
-    public:
-        std::vector<ChessInformationSet::Square> pawns;
-        std::vector<ChessInformationSet::Square> knights;
-        std::vector<ChessInformationSet::Square> bishops;
-        std::vector<ChessInformationSet::Square> rooks;
-        std::vector<ChessInformationSet::Square> queens;
-        std::vector<ChessInformationSet::Square> kings;
-    };
     enum Player {Self, Opponent};
     enum PieceColor {White,Black};
 
     ChessInformationSet cis;
-    ChessInformationSet::ChessPiecesInformation playerPiecesTracker;
+    CIS::OnePlayerChessInfo playerPiecesTracker;
     PieceColor selfColor;
 
 public:
@@ -104,10 +96,10 @@ public:
      * @param selfColor
      * @return
      */
-    std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> generateHypotheses
+    std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> generateHypotheses
     (
-        ChessInformationSet::ChessPiecesInformation& piecesOpponent,
-        ChessInformationSet::ChessPiecesInformation& piecesSelf,
+        ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
+        ChessInformationSet::OnePlayerChessInfo& piecesSelf,
         const PieceColor selfColor
     ) const;
 
@@ -117,9 +109,9 @@ private:
      * @param piecesSelf
      * @return
      */
-    std::unique_ptr<std::vector<ChessInformationSet::ChessPiecesInformation>> generateHypotheses
+    std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> generateHypotheses
     (
-        ChessInformationSet::ChessPiecesInformation& piecesOpponent
+        ChessInformationSet::OnePlayerChessInfo& piecesOpponent
     );
     
     /**
@@ -128,10 +120,9 @@ private:
      * @param side
      * @return
      */
-    std::unique_ptr<ChessPiecesObservation> getDecodedStatePlane
+    std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,CIS::OnePlayerChessInfo>> getDecodedStatePlane
     (
-        StateObj *pos,
-        const Player side        
+        StateObj *pos
     ) const;
     
     /**
