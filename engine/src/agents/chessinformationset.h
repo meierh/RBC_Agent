@@ -132,7 +132,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 bool queenside;
                 
                 // en-passent legal
-                std::vector<ChessInformationSet::Square> en_passent;
+                std::vector<ChessInformationSet::Square> en_passant;
                 
                 // fifty move rule counter
                 std::uint8_t no_progress_count;
@@ -150,13 +150,90 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 std::unordered_map<Square,PieceType,Square::Hasher> squareToPieceMap;
         };
         
+        class BoardClause
+        // Class for logical clause consisting of multiple literals evaluated as a disjunction
+        {
+            public:
+                enum class PieceType {pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5,any=6,none=7};
+            private:
+                unsigned int literalNbr;
+                std::vector<Square> boardPlaces;
+                std::vector<PieceType> boardPlaceTypes;
+                std::vector<bool> conditionBool;
+            public:
+                BoardClause(Square boardPlace,PieceType boardPlaceType)
+                {
+                    boardPlaces.push_back(boardPlace);
+                    boardPlaceTypes.push_back(boardPlaceType);
+                    literalNbr = 1;
+                };
+
+                BoardClause operator|(const BoardClause& rhs) const
+                {
+                    BoardClause lhs = *this;
+                    lhs.boardPlaces.insert
+                        (lhs.boardPlaces.end(),rhs.boardPlaces.begin(),rhs.boardPlaces.end());
+                    lhs.boardPlaceTypes.insert
+                        (lhs.boardPlaceTypes.end(),rhs.boardPlaceTypes.begin(),rhs.boardPlaceTypes.end());
+                    lhs.conditionBool.insert
+                        (lhs.conditionBool.end(),rhs.conditionBool.begin(),rhs.conditionBool.end());
+                    lhs.literalNbr += rhs.literalNbr;
+                    return lhs;
+                };
+                
+                BoardClause operator!() const
+                {
+                    BoardClause lhs = *this;
+                    for(unsigned int i=0; i<lhs.literalNbr; i++)
+                        lhs.conditionBool[i] = !lhs.conditionBool[i];
+                    return lhs;
+                };
+                
+                bool operator()(OnePlayerChessInfo& info) const
+                // one condition must be true for the Board Condition to evaluate true
+                {
+                    std::function<std::pair<bool,ChessInformationSet::PieceType>(Square)> spPieceTypeCheck = info.getSquarePieceTypeCheck();
+                    bool oneTrue = false;
+                    
+                    for(unsigned int clauseInd=0; clauseInd<literalNbr; clauseInd++)
+                    {
+                        const Square& sq = boardPlaces[clauseInd];
+                        const PieceType& pT = boardPlaceTypes[clauseInd];
+                        bool boolVal = conditionBool[clauseInd];
+                        std::pair<bool,ChessInformationSet::PieceType> sqPieceType = spPieceTypeCheck(sq);
+                        bool thisClauseBool;
+                        if(pT == PieceType::none)
+                        {
+                            thisClauseBool =(sqPieceType.first==false);
+                        }
+                        else if(pT == PieceType::any)
+                        {
+                            thisClauseBool = (sqPieceType.first==true);
+                        }
+                        else
+                        {
+                            if(sqPieceType.first)
+                            {
+                                unsigned int pT_int_given = static_cast<unsigned int>(sqPieceType.second);
+                                unsigned int pT_int_required = static_cast<unsigned int>(pT);
+                                thisClauseBool = (pT_int_given==pT_int_required);
+                            }
+                            else
+                                thisClauseBool = false;
+                        }
+                        oneTrue = oneTrue || thisClauseBool;
+                    }
+                    return oneTrue;
+                };
+        };
+        
         /**
          * Marks boards incompatible with observations
          * @param noPieces
          * @param unknownPieces
          * @param knownPieces
          */
-        void markIncompatibleBoards(std::vector<Square>& noPieces, std::vector<Square>& unknownPieces, std::vector<std::pair<PieceType,Square>>& knownPieces);
+        void markIncompatibleBoards(const std::vector<BoardClause>& conditions);
         
         void add(OnePlayerChessInfo& item, double probability);
         

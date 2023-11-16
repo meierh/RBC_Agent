@@ -53,6 +53,126 @@ RBCAgent::RBCAgent
 MCTSAgentBatch(netSingle, netBatches, searchSettings, playSettings, noa, sN)
 {}
 
+std::string RBCAgent::FullChessInfo::getFEN
+(
+    const CIS::OnePlayerChessInfo& white,
+    const CIS::OnePlayerChessInfo& black,
+    const PieceColor nextTurn,
+    const unsigned int nextCompleteTurn
+)
+{
+    std::array<const CIS::OnePlayerChessInfo*,2> colors = {&white,&black};
+    
+    std::array<std::array<char,8>,8> chessBoard;
+    std::for_each(chessBoard.begin(),chessBoard.end(),[](auto& row){row.fill(' ');});
+    std::string castlingString;
+    std::string enPassantString;
+    unsigned int halfTurns=-1;
+    
+    unsigned int charOffset=0;
+    for(const CIS::OnePlayerChessInfo* oneColorInfoPtr : colors)
+    {
+        const CIS::OnePlayerChessInfo& oneColorInfo = *oneColorInfoPtr;
+        
+        std::vector<std::tuple<const std::vector<CIS::Square>*,char>> piecesList =
+            {
+            {&(oneColorInfo.pawns),  'P'},
+            {&(oneColorInfo.knights),'N'},
+            {&(oneColorInfo.bishops),'B'},
+            {&(oneColorInfo.rooks),  'R'},
+            {&(oneColorInfo.queens), 'Q'},
+            {&(oneColorInfo.kings),  'K'}
+            };
+            
+        for(const std::tuple<const std::vector<CIS::Square>*,char>& onePieceType : piecesList)
+        {
+            const std::vector<CIS::Square>* squareList = std::get<0>(onePieceType);
+            char symbolToPrint = std::get<1>(onePieceType);
+            for(const CIS::Square& sq : *squareList)
+            {
+                unsigned int column = static_cast<unsigned int>(sq.column);
+                unsigned int row = static_cast<unsigned int>(sq.row);
+                
+                char& squareSymbol = chessBoard[row][column];
+                if(squareSymbol != ' ')
+                    throw std::logic_error("Pieces overlay!");
+                squareSymbol = symbolToPrint + charOffset;
+            }
+        }
+        
+        if(oneColorInfo.kingside)
+            castlingString += 'K'+charOffset;
+        if(oneColorInfo.queenside)
+            castlingString += 'Q'+charOffset;
+            
+        for(const CIS::Square& sq : oneColorInfo.en_passant)
+        {
+            if(enPassantString.size()>0)
+                throw std::logic_error("Pieces overlay!");
+            unsigned int column = static_cast<unsigned int>(sq.column);
+            unsigned int row = static_cast<unsigned int>(sq.row);
+            char columnChar = column + 97;
+            char rowChar = row + 60;
+            enPassantString += columnChar;
+            enPassantString += rowChar;
+        }
+        
+        charOffset+=32;
+    }
+    
+    if(white.no_progress_count != black.no_progress_count)
+        throw std::logic_error("Mismatch in no progress count!");
+    halfTurns = white.no_progress_count;
+        
+    //Build string
+    std::string piecePlacement;
+    std::vector<std::string> piecePlacementRows;
+    for(std::array<char,8> oneRow : chessBoard)
+    {
+        std::string oneRowStr;
+        std::queue<char> oneRowQ;
+        std::for_each(oneRow.begin(),oneRow.end(),[&](char entry){oneRowQ.push(entry);});
+        unsigned int counter=0;
+        while(!oneRowQ.empty())
+        {
+            char curr = oneRowQ.front();
+            oneRowQ.pop();
+            if(curr==' ')
+            {
+                counter++;
+            }
+            else
+            {
+                if(counter>0)
+                    oneRowStr += std::to_string(counter);
+                oneRowStr += curr;
+                counter = 0;
+            }
+        }
+        if(counter>0)
+            oneRowStr += std::to_string(counter);
+        piecePlacementRows.push_back(oneRowStr);
+    }
+    for(unsigned int row=0; row<piecePlacementRows.size()-1; row++)
+    {
+        piecePlacement += piecePlacementRows[row]+'/';
+    }
+    piecePlacement += piecePlacementRows.back();
+        
+    std::string activeColor = (nextTurn==PieceColor::White)?"w":"b";
+    
+    std::string castlingAvail = (castlingString.size()>0)?castlingString:"-";
+    
+    std::string enPassantAvail = (enPassantString.size()>0)?enPassantString:"-";
+    
+    std::string halfmoveClock = std::to_string(halfTurns);
+    std::string fullmoveClock = std::to_string(nextCompleteTurn);
+    
+    std::string fen = piecePlacement+' '+activeColor+' '+castlingAvail+' '
+                     +enPassantAvail+' '+halfmoveClock+' '+fullmoveClock;
+    return fen;
+}
+
 void RBCAgent::set_search_settings
 (
     StateObj *pos,
@@ -433,22 +553,22 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
     return generateHypotheses(piecesOpponent,this->playerPiecesTracker,this->selfColor);
 }
 
-std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,ChessInformationSet::OnePlayerChessInfo>> RBCAgent::getDecodedStatePlane
+std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::getDecodedStatePlane
 (
     StateObj *pos
 ) const
 {
     using CIS = ChessInformationSet;
     
-    float* inputPlanes;
+    auto inputPlanesSmPtr = std::make_unique<float[]>(net->get_batch_size() * net->get_nb_input_values_total());   
+    float* inputPlanes =  inputPlanesSmPtr.get();
     pos->get_state_planes(true,inputPlanes,1);
     
     std::uint16_t offset = 0;    
-    auto info = std::make_unique<std::pair<ChessInformationSet::OnePlayerChessInfo,ChessInformationSet::OnePlayerChessInfo>>();
-    ChessInformationSet::OnePlayerChessInfo& whiteInfo = info->first;
-    ChessInformationSet::OnePlayerChessInfo& blackInfo = info->second;
-    std::array<CIS::OnePlayerChessInfo*,2> obs = {&whiteInfo,&blackInfo};
+    auto info = std::make_unique<FullChessInfo>();
+    std::array<CIS::OnePlayerChessInfo*,2> obs = {&(info->white),&(info->black)};
     
+    //pieces position
     for(std::uint16_t color=0; color<obs.size(); color++)
     {
         std::array<float,64> pawns;
@@ -583,54 +703,68 @@ void RBCAgent::handleOpponentMoveInfo
     StateObj *pos
 )
 {
-    std::vector<ChessInformationSet::Square> captureSquares;
+    using CIS = ChessInformationSet;
     
-    /*
-    std::unique_ptr<ChessPiecesObservation> ownPiecesObs = getDecodedStatePlane(pos,Player::Self);
-    std::unordered_map<std::uint8_t,std::vector<ChessInformationSet::Square>*> comparisonSet = 
-    {
-        {0,&(ownPiecesObs->pawns)},{1,&(ownPiecesObs->pawns)},{2,&(ownPiecesObs->pawns)},{3,&(ownPiecesObs->pawns)},{4,&(ownPiecesObs->pawns)},{5,&(ownPiecesObs->pawns)},{6,&(ownPiecesObs->pawns)},{7,&(ownPiecesObs->pawns)},
-        {8,&(ownPiecesObs->rooks)},{15,&(ownPiecesObs->rooks)},
-        {9,&(ownPiecesObs->knights)},{14,&(ownPiecesObs->knights)},
-        {10,&(ownPiecesObs->bishops)},{13,&(ownPiecesObs->bishops)},
-        {11,&(ownPiecesObs->queens)},
-        {12,&(ownPiecesObs->kings)}
-    };
-    */
+    std::unique_ptr<FullChessInfo> observation = getDecodedStatePlane(pos);
+    CIS::OnePlayerChessInfo& selfObs = (selfColor==White)?observation->white:observation->black;
+    CIS::OnePlayerChessInfo& selfState = playerPiecesTracker;
+
+    bool onePieceCaptured = false;
+    std::vector<CIS::BoardClause> conditions;
     
-    // Test for captured pawns
-    /*
-    for(unsigned int i=0; i<16; i++) 
+    // test for captured pawns
+    auto pawnHere = selfObs.getBlockCheck(selfObs.pawns,CIS::PieceType::pawn);
+    auto enPassantHere = selfState.getBlockCheck(selfState.en_passant,CIS::PieceType::pawn);
+    for(CIS::Square& sq : selfState.pawns)
     {
-        std::pair<ChessInformationSet::Square,bool>& onePiece = playerPiecesTracker.data[i];
-        if(onePiece.second)
+        if(!pawnHere(sq))
+        // Pawn of self was captured
         {
-            bool pieceExist = false;
-            std::vector<ChessInformationSet::Square>* set = comparisonSet[i];
-            for(ChessInformationSet::Square& obsOwnPawn : *set)
+            onePieceCaptured = true;
+            bool inBoard;
+            CIS::Square en_passant_sq = sq;
+            if(selfColor==White)
+                inBoard = en_passant_sq.vertMinus(1);
+            else
+                inBoard = en_passant_sq.vertPlus(1);
+            if(!inBoard)
+                throw std::logic_error("En-passant field can not be outside the field!");
+            CIS::BoardClause capturedDirect(sq,CIS::BoardClause::PieceType::any);
+            CIS::BoardClause capturedEnPassant(en_passant_sq,CIS::BoardClause::PieceType::pawn);
+            conditions.push_back(capturedDirect | capturedEnPassant);
+        }
+    }
+    
+    // test for all other captured pieces
+    std::vector<std::tuple<std::vector<CIS::Square>*,CIS::PieceType,std::vector<CIS::Square>*>>   nonPawnPiecesList =
+        {
+         {&(selfObs.knights),CIS::PieceType::knight,&(selfState.knights)},
+         {&(selfObs.bishops),CIS::PieceType::bishop,&(selfState.bishops)},
+         {&(selfObs.rooks),  CIS::PieceType::rook,  &(selfState.rooks)},
+         {&(selfObs.queens), CIS::PieceType::queen, &(selfState.queens)},
+         {&(selfObs.kings),  CIS::PieceType::king,  &(selfState.kings)}
+        };
+    for(auto pieceTypeData : nonPawnPiecesList)
+    {
+        std::vector<CIS::Square>* selfObsPieceType = std::get<0>(pieceTypeData);
+        CIS::PieceType pT = std::get<1>(pieceTypeData);
+        std::vector<CIS::Square>* selfStatePieceType = std::get<2>(pieceTypeData);
+        
+        auto pieceTypeHere = selfObs.getBlockCheck(*selfObsPieceType,pT);
+        for(const CIS::Square& sq : *selfStatePieceType)
+        {
+            if(!pieceTypeHere(sq))
             {
-                if(obsOwnPawn == onePiece.first)
-                    pieceExist = true;
-            }
-            if(!pieceExist)
-            {
-                captureSquares.push_back(onePiece.first);
-                onePiece.second = false;
+                if(onePieceCaptured)
+                    throw std::logic_error("Multiple pieces can not be captured in one turn!");
+                onePieceCaptured = true;
+                CIS::BoardClause capturedDirect(sq,CIS::BoardClause::PieceType::any);
+                conditions.push_back(capturedDirect);
             }
         }
     }
-    */
     
-    if(captureSquares.size()>1)
-    {
-        // Throw error
-    }
-    else if(captureSquares.size()==1)
-    {
-        std::vector<ChessInformationSet::Square> noPieces;
-        std::vector<std::pair<ChessInformationSet::PieceType,ChessInformationSet::Square>> knownPieces;
-        cis.markIncompatibleBoards(noPieces,captureSquares,knownPieces);
-    }
+    cis.markIncompatibleBoards(conditions);
 }
 
 void RBCAgent::handleScanInfo
@@ -639,66 +773,36 @@ void RBCAgent::handleScanInfo
     ChessInformationSet::Square scanCenter
 )
 {
-    /*
-    std::unique_ptr<ChessPiecesObservation> opponentPiecesObs = getDecodedStatePlane(pos,Player::Opponent);
+    using CIS = ChessInformationSet;
     
-    std::unordered_set<ChessInformationSet::Square,ChessInformationSet::Square::Hasher> scannedSquares;
-    int colC = static_cast<int>(scanCenter.column);
-    int rowC = static_cast<int>(scanCenter.row);
-    for(int col=colC-1; col<colC+2; col++)
-    {
-        for(int row=rowC-1; col<rowC+2; row++)
-        {
-            if(row>=0 && row<8)
-            {
-                if(col>=0 && row<8)
-                {
-                    ChessInformationSet::ChessColumn c = static_cast<ChessInformationSet::ChessColumn>(col);
-                    ChessInformationSet::ChessRow r = static_cast<ChessInformationSet::ChessRow>(row);
-                    scannedSquares.insert({c,r});
-                }
-            }
-        }
-    }
+    std::unique_ptr<FullChessInfo> observation = getDecodedStatePlane(pos);
+    CIS::OnePlayerChessInfo& opponentObs = (selfColor==White)?observation->black:observation->white;
 
-    std::vector<ChessInformationSet::Square> noPieces;
-    std::vector<ChessInformationSet::Square> unknownPieces;
-    std::vector<std::pair<ChessInformationSet::PieceType,ChessInformationSet::Square>> knownPieces;
+    std::vector<CIS::BoardClause> conditions;
     
-    for(ChessInformationSet::Square sq : opponentPiecesObs->pawns)
-        knownPieces.push_back({ChessInformationSet::PieceType::pawn,sq});
-    
-    for(ChessInformationSet::Square sq : opponentPiecesObs->knights)
-        knownPieces.push_back({ChessInformationSet::PieceType::knight,sq});
-    
-    for(ChessInformationSet::Square sq : opponentPiecesObs->bishops)
-        knownPieces.push_back({ChessInformationSet::PieceType::bishop,sq});
-    
-    for(ChessInformationSet::Square sq : opponentPiecesObs->rooks)
-        knownPieces.push_back({ChessInformationSet::PieceType::rook,sq});
-    
-    for(ChessInformationSet::Square sq : opponentPiecesObs->queens)
-        knownPieces.push_back({ChessInformationSet::PieceType::queen,sq});
-    
-    for(ChessInformationSet::Square sq : opponentPiecesObs->kings)
-        knownPieces.push_back({ChessInformationSet::PieceType::king,sq});
-    
-    for(std::pair<ChessInformationSet::PieceType,ChessInformationSet::Square> knownPiece : knownPieces)
-    {
-        auto iter = scannedSquares.find(knownPiece.second);
-        if(iter!=scannedSquares.end())
+    std::vector<std::tuple<std::vector<CIS::Square>*,CIS::PieceType>> piecesList =
         {
-            scannedSquares.erase(iter);
+         {&(opponentObs.pawns),  CIS::PieceType::pawn},
+         {&(opponentObs.knights),CIS::PieceType::knight},
+         {&(opponentObs.bishops),CIS::PieceType::bishop},
+         {&(opponentObs.rooks),  CIS::PieceType::rook},
+         {&(opponentObs.queens), CIS::PieceType::queen},
+         {&(opponentObs.kings),  CIS::PieceType::king}
+        };
+    for(auto pieceTypeData : piecesList)
+    {
+        std::vector<CIS::Square>* opponentObsPieceType = std::get<0>(pieceTypeData);
+        CIS::PieceType pT = std::get<1>(pieceTypeData);
+        unsigned int pT_int = static_cast<unsigned int>(pT);
+        CIS::BoardClause::PieceType pT_Clause = static_cast<CIS::BoardClause::PieceType>(pT_int);
+        
+        for(CIS::Square sq : *opponentObsPieceType)
+        {
+            CIS::BoardClause observedPiece(sq,pT_Clause);
+            conditions.push_back(observedPiece);
         }
     }
-    
-    for(auto iter = scannedSquares.begin(); iter!=scannedSquares.end(); iter++)
-    {
-        noPieces.push_back(*iter);
-    }
-    
-    cis.markIncompatibleBoards(noPieces,unknownPieces,knownPieces);
-    */
+    cis.markIncompatibleBoards(conditions);
 }
 
 ChessInformationSet::Square RBCAgent::applyScanAction

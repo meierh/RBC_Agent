@@ -55,6 +55,30 @@ class RBCAgent : public MCTSAgentBatch
 private:   
     enum Player {Self, Opponent};
     enum PieceColor {White,Black};
+    
+    class FullChessInfo
+    {
+        public:
+            CIS::OnePlayerChessInfo white;
+            CIS::OnePlayerChessInfo black;
+            
+            static std::string getFEN
+            (
+                const CIS::OnePlayerChessInfo& white,
+                const CIS::OnePlayerChessInfo& black,
+                const PieceColor nextTurn,
+                const unsigned int nextCompleteTurn
+            );
+            
+            std::string getFEN
+            (
+                const PieceColor nextTurn,
+                const unsigned int nextCompleteTurn
+            ) const
+            {
+                return getFEN(this->white,this->black,nextTurn,nextCompleteTurn);
+            };
+    };
 
     ChessInformationSet cis;
     CIS::OnePlayerChessInfo playerPiecesTracker;
@@ -120,7 +144,7 @@ private:
      * @param side
      * @return
      */
-    std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,CIS::OnePlayerChessInfo>> getDecodedStatePlane
+    std::unique_ptr<FullChessInfo> getDecodedStatePlane
     (
         StateObj *pos
     ) const;

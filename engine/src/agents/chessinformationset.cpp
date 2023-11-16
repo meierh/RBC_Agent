@@ -104,7 +104,6 @@ std::function<std::pair<bool,ChessInformationSet::PieceType>(ChessInformationSet
     return squarePieceTypeCheck;
 }
 
-
 void ChessInformationSet::setBoard
 (
     ChessInformationSet::OnePlayerChessInfo& pieces,
@@ -172,7 +171,7 @@ std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,double>> Chess
         std::uint16_t bitInd = bitStartInd+boardInd;
         if(bits[bitInd])
         {
-            board->first.en_passent.push_back(boardIndexToSquare(boardInd));
+            board->first.en_passant.push_back(boardIndexToSquare(boardInd));
         }
     }
     bitStartInd += 64;
@@ -233,7 +232,7 @@ std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard
     bitBoard[bitStartInd] = piecesInfo.queenside;
     bitStartInd++;
     
-    std::function<bool(Square)> pieceCheck = piecesInfo.getBlockCheck(piecesInfo.en_passent,static_cast<CIS::PieceType>(0));
+    std::function<bool(Square)> pieceCheck = piecesInfo.getBlockCheck(piecesInfo.en_passant,static_cast<CIS::PieceType>(0));
     for(std::uint8_t boardInd=0; boardInd<64; boardInd++)
     {
         CIS::Square sq = boardIndexToSquare(boardInd);
@@ -280,44 +279,23 @@ void ChessInformationSet::add
 
 void ChessInformationSet::markIncompatibleBoards
 (
-    std::vector<Square>& noPieces,
-    std::vector<Square>& unknownPieces,
-    std::vector<std::pair<PieceType,Square>>& knownPieces
+    const std::vector<BoardClause>& conditions
 )
 {
     std::unique_ptr<std::pair<OnePlayerChessInfo,double>> board;
     for(std::uint64_t infoSetIndex = 0; infoSetIndex<this->size(); infoSetIndex++)
     {
-        bool incompatibleBoard = false;
         board = getBoard(infoSetIndex);
         OnePlayerChessInfo& piecesInfo = board->first;
-        std::function<std::pair<bool,PieceType>(Square)> squareMatch = piecesInfo.getSquarePieceTypeCheck();
         
-        for(const Square& sq : noPieces)
+        bool incompatibleBoard = true;
+        for(const BoardClause& oneClause : conditions)
         {
-            if(squareMatch(sq).first)
-            {
-                incompatibleBoard=true;
-            }
-        }        
-        for(const Square& sq : unknownPieces)
-        {
-            if(!squareMatch(sq).first)
-            {
-                incompatibleBoard=true;
-            }
+            incompatibleBoard = incompatibleBoard && oneClause(piecesInfo);
         }
-        for(const std::pair<PieceType,Square>& pieceSq : knownPieces)
-        {
-            const Square& sq = pieceSq.second;
-            const PieceType& pieceType = pieceSq.first;
-            std::pair<bool,PieceType> match = squareMatch(sq);
-            if(!match.first || match.second!=pieceType)
-            {
-                incompatibleBoard=true;
-            }
-        }
-        incompatibleBoards.push(infoSetIndex);
+        
+        if(incompatibleBoard)
+            incompatibleBoards.push(infoSetIndex);
     }
 }
 
