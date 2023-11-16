@@ -54,7 +54,9 @@ class RBCAgent : public MCTSAgentBatch
     
 private:   
     enum Player {Self, Opponent};
-    enum PieceColor {White,Black};
+    enum PieceColor {white,black};
+    static open_spiel::chess::Color AgentColor_to_OpenSpielColor(const PieceColor agent_pC);
+    static PieceColor OpenSpielColor_to_RBCColor(const open_spiel::chess::Color os_pC);
     
     class FullChessInfo
     {
@@ -83,6 +85,7 @@ private:
     ChessInformationSet cis;
     CIS::OnePlayerChessInfo playerPiecesTracker;
     PieceColor selfColor;
+    unsigned int currentTurn;
 
 public:
     RBCAgent

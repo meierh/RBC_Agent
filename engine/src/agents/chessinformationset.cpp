@@ -7,28 +7,74 @@ ChessInformationSet::ChessInformationSet
 :InformationSet()
 {}
 
-ChessInformationSet::PieceType ChessInformationSet::boardIndexToPieceType
+ChessInformationSet::PieceType ChessInformationSet::OpenSpielPieceType_to_CISPieceType
 (
-    std::uint8_t boardIndex
+    const open_spiel::chess::PieceType os_pT
 )
 {
-    assert(boardIndex<16);
-    PieceType type;    
-    if(boardIndex<8)
-        type = PieceType::pawn;
-    else if(boardIndex==8 || boardIndex==15)
-        type = PieceType::rook;
-    else if(boardIndex==9 || boardIndex==14)
-        type = PieceType::knight;
-    else if(boardIndex==10 || boardIndex==13)
-        type = PieceType::bishop;
-    else if(boardIndex==11)
-        type = PieceType::queen;
-    else if(boardIndex==12)
-        type = PieceType::king;
-    else
-        assert(false);
-    return type;
+    PieceType result;
+    switch(os_pT)
+    {
+        case open_spiel::chess::PieceType::kPawn:
+            result = PieceType::pawn;
+            break;
+        case open_spiel::chess::PieceType::kKnight:
+            result = PieceType::knight;
+            break;        
+        case open_spiel::chess::PieceType::kBishop:
+            result = PieceType::bishop;
+            break;        
+        case open_spiel::chess::PieceType::kRook:
+            result = PieceType::rook;
+            break;        
+        case open_spiel::chess::PieceType::kQueen:
+            result = PieceType::queen;
+            break;        
+        case open_spiel::chess::PieceType::kKing:
+            result = PieceType::king;
+            break;
+        case open_spiel::chess::PieceType::kEmpty:
+            result = PieceType::empty;
+            break;
+        default:
+            throw std::logic_error("Conversion failure from open_spiel::chess::PieceType to ChessInformationSet::PieceType!");
+    }
+    return result;
+}
+
+open_spiel::chess::PieceType ChessInformationSet::CISPieceType_to_OpenSpielPieceType
+(
+    const ChessInformationSet::PieceType cis_pT
+)
+{
+    open_spiel::chess::PieceType result;
+    switch(cis_pT)
+    {
+        case PieceType::pawn:
+            result = open_spiel::chess::PieceType::kPawn;
+            break;
+        case PieceType::knight:
+            result = open_spiel::chess::PieceType::kKnight;
+            break;        
+        case PieceType::bishop:
+            result = open_spiel::chess::PieceType::kBishop;
+            break;        
+        case PieceType::rook:
+            result = open_spiel::chess::PieceType::kRook;
+            break;        
+        case PieceType::queen:
+            result = open_spiel::chess::PieceType::kQueen;
+            break;        
+        case PieceType::king:
+            result = open_spiel::chess::PieceType::kKing;
+            break;
+        case PieceType::empty:
+            result = open_spiel::chess::PieceType::kEmpty;
+            break;
+        default:
+            throw std::logic_error("Conversion failure from ChessInformationSet::PieceType to open_spiel::chess::PieceType!");
+    }
+    return result;
 }
 
 std::function<bool(const ChessInformationSet::Square&)> ChessInformationSet::OnePlayerChessInfo::getBlockCheck()
@@ -297,6 +343,29 @@ void ChessInformationSet::markIncompatibleBoards
         if(incompatibleBoard)
             incompatibleBoards.push(infoSetIndex);
     }
+}
+
+ChessInformationSet::Square::Square()
+{}
+
+ChessInformationSet::Square::Square
+(
+    ChessInformationSet::ChessColumn column,
+    ChessInformationSet::ChessRow row
+):
+column(column),
+row(row)
+{}
+
+ChessInformationSet::Square::Square(const open_spiel::chess_common::Square& os_sq)
+{
+    if(os_sq.x<0 || os_sq.x>=8 || os_sq.y<0 || os_sq.y>=8)
+        throw std::logic_error("open_spiel::chess_common::Square out of board bounds");
+    std::uint8_t ux = os_sq.x;
+    std::uint8_t uy = os_sq.y;
+    
+    column = static_cast<ChessColumn>(ux);
+    row = static_cast<ChessRow>(uy);
 }
 
 bool ChessInformationSet::Square::vertPlus(std::uint8_t multiple) {return moveSquare(0,multiple);}

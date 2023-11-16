@@ -50,8 +50,23 @@ RBCAgent::RBCAgent
     int noa,
     bool sN
 ):
-MCTSAgentBatch(netSingle, netBatches, searchSettings, playSettings, noa, sN)
+MCTSAgentBatch(netSingle, netBatches, searchSettings, playSettings, noa, sN),
+currentTurn(0)
 {}
+
+open_spiel::chess::Color RBCAgent::AgentColor_to_OpenSpielColor
+(
+    const RBCAgent::PieceColor agent_pC
+)
+{
+}
+
+RBCAgent::PieceColor RBCAgent::OpenSpielColor_to_RBCColor
+(
+    const open_spiel::chess::Color os_pC
+)
+{
+}
 
 std::string RBCAgent::FullChessInfo::getFEN
 (
@@ -159,7 +174,7 @@ std::string RBCAgent::FullChessInfo::getFEN
     }
     piecePlacement += piecePlacementRows.back();
         
-    std::string activeColor = (nextTurn==PieceColor::White)?"w":"b";
+    std::string activeColor = (nextTurn==PieceColor::white)?"w":"b";
     
     std::string castlingAvail = (castlingString.size()>0)?castlingString:"-";
     
@@ -198,6 +213,45 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
     using CIS_CPI = ChessInformationSet::OnePlayerChessInfo;
     auto hypotheses = std::make_unique<std::vector<CIS_CPI>>();
     
+    FullChessInfo fullState;
+    PieceColor opponentColor;
+    unsigned int nextCompleteTurn;
+    if(selfColor == PieceColor::white)
+    {
+        fullState.white = piecesSelf;
+        fullState.black = piecesOpponent;
+        opponentColor = PieceColor::black;
+        nextCompleteTurn = currentTurn;
+    }
+    else
+    {
+        fullState.white = piecesOpponent;
+        fullState.black = piecesSelf;
+        opponentColor = PieceColor::white;
+        nextCompleteTurn = currentTurn+1;
+    }
+    std::string fen = fullState.getFEN(opponentColor,nextCompleteTurn);
+    OpenSpielState hypotheticState;
+    hypotheticState.set(fen,false,StateConstants::DEFAULT_VARIANT());
+    std::vector<Action> legal_actions_int = hypotheticState.legal_actions();
+    std::vector<open_spiel::chess::Move> legal_actions_move(legal_actions_int.size());
+    for(unsigned int actionInd=0; actionInd<legal_actions_int.size(); actionInd++)
+    {
+        legal_actions_move[actionInd] = hypotheticState.ActionToMove(legal_actions_int[actionInd]);
+    }
+    for(const open_spiel::chess::Move& move : legal_actions_move)
+    {
+        CIS::Square from(move.from);
+        CIS::Square to(move.to);
+        CIS::PieceType pieceType = CIS::OpenSpielPieceType_to_CISPieceType(move.piece.type);
+        CIS::PieceType promPieceType = CIS::OpenSpielPieceType_to_CISPieceType(move.promotion_type);
+    }
+    
+    //open_spiel::chess::Move ActionToMove(Action action)
+    
+    
+    
+    
     /*
     std::function<bool(const CIS_Square&)> piecesSelfBlock = piecesSelf.getBlockCheck();
     std::function<bool(const CIS_Square&)> piecesOppoBlock = piecesOpponent.getBlockCheck();
@@ -206,23 +260,23 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
     pawnLegalMoves = [&](const CIS_Square& sq)
     {
         bool hasNotMoved=false;
-        if(selfColor == PieceColor::White)
+        if(selfColor == PieceColor::white)
         {
             if(sq.row == ChessInformationSet::ChessRow::one)
-                std::logic_error("White pawn can not be on row one");
+                std::logic_error("white pawn can not be on row one");
             else if(sq.row == ChessInformationSet::ChessRow::two)
                 hasNotMoved=true;
         }
         else
         {
             if(sq.row == ChessInformationSet::ChessRow::eight)
-                std::logic_error("Black pawn can not be on row eight");
+                std::logic_error("black pawn can not be on row eight");
             else if(sq.row == ChessInformationSet::ChessRow::seven)
                 hasNotMoved=true;
         }
         
         auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
-        if(selfColor == PieceColor::White)
+        if(selfColor == PieceColor::white)
         {
             // Non capturing moves
             CIS_Square oneForw(sq);
@@ -706,7 +760,7 @@ void RBCAgent::handleOpponentMoveInfo
     using CIS = ChessInformationSet;
     
     std::unique_ptr<FullChessInfo> observation = getDecodedStatePlane(pos);
-    CIS::OnePlayerChessInfo& selfObs = (selfColor==White)?observation->white:observation->black;
+    CIS::OnePlayerChessInfo& selfObs = (selfColor==white)?observation->white:observation->black;
     CIS::OnePlayerChessInfo& selfState = playerPiecesTracker;
 
     bool onePieceCaptured = false;
@@ -723,7 +777,7 @@ void RBCAgent::handleOpponentMoveInfo
             onePieceCaptured = true;
             bool inBoard;
             CIS::Square en_passant_sq = sq;
-            if(selfColor==White)
+            if(selfColor==white)
                 inBoard = en_passant_sq.vertMinus(1);
             else
                 inBoard = en_passant_sq.vertPlus(1);
@@ -776,7 +830,7 @@ void RBCAgent::handleScanInfo
     using CIS = ChessInformationSet;
     
     std::unique_ptr<FullChessInfo> observation = getDecodedStatePlane(pos);
-    CIS::OnePlayerChessInfo& opponentObs = (selfColor==White)?observation->black:observation->white;
+    CIS::OnePlayerChessInfo& opponentObs = (selfColor==white)?observation->black:observation->white;
 
     std::vector<CIS::BoardClause> conditions;
     

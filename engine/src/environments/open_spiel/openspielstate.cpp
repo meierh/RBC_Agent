@@ -207,3 +207,19 @@ void OpenSpielState::init(int variant, bool isChess960) {
     spielState = spielGame->NewInitialState();
     spielState->ApplyAction(1);  // dummy sense action
 }
+
+open_spiel::chess::Move OpenSpielState::ActionToMove(Action action) const
+{
+    std::unique_ptr<open_spiel::rbc::RbcState> rbcState;
+    open_spiel::State* spielStatePtr = spielState.get();
+    open_spiel::rbc::RbcState* rbcStatePtr;
+    try{
+        rbcStatePtr = dynamic_cast<open_spiel::rbc::RbcState*>(spielStatePtr);
+    }
+    catch(std::bad_cast& e)
+    {
+        throw std::logic_error("SpielState is not of RbcState type! Cast failed");
+    }
+    open_spiel::chess::Move move = open_spiel::chess::ActionToMove(action, rbcStatePtr->Board());
+    return move;
+}

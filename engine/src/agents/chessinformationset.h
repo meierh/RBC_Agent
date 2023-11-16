@@ -34,6 +34,8 @@
 #include "informationset.h"
 #include <functional>
 
+#include "../environments/open_spiel/openspielstate.h"
+
 namespace crazyara {
     
 constexpr std::uint64_t chessInfoSize= 6*64 + // pieces {pawn,knight,bishop,rook,queen,king}
@@ -55,6 +57,9 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             public:
                 ChessColumn column;
                 ChessRow row;
+                Square();
+                Square(ChessInformationSet::ChessColumn column,ChessInformationSet::ChessRow row);
+                Square(const open_spiel::chess_common::Square& os_sq);
                 bool operator==(const Square& other) const
                 {
                     return column==other.column && row==other.row;
@@ -95,10 +100,10 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         };
         enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
                           rook1=8,knight1=9,bishop1=10,queen=11,king=12,bishop2=13,knight2=14,rook2=15};
-        enum class PieceType {pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5};
-        
-        PieceType boardIndexToPieceType(std::uint8_t boardIndex);
-        
+        enum class PieceType{pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5,empty=6};
+        static PieceType OpenSpielPieceType_to_CISPieceType(const open_spiel::chess::PieceType os_pT);
+        static open_spiel::chess::PieceType CISPieceType_to_OpenSpielPieceType(const PieceType cis_pT);
+
         static Square boardIndexToSquare(std::uint8_t index)
         {
             std::uint8_t x = index / 8; //column {A-H}

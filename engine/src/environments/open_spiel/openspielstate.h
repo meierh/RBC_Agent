@@ -149,6 +149,8 @@ public:
     void set_auxiliary_outputs(const float* auxiliaryOutputs);
     OpenSpielState *clone() const;
     void init(int variant, bool isChess960);
+    
+    open_spiel::chess::Move ActionToMove(Action action) const;
 };
 
 #endif // OPENSPIELSTATE_H
