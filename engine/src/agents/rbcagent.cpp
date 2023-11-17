@@ -59,6 +59,22 @@ open_spiel::chess::Color RBCAgent::AgentColor_to_OpenSpielColor
     const RBCAgent::PieceColor agent_pC
 )
 {
+    open_spiel::chess::Color result;
+    switch(agent_pC)
+    {
+        case PieceColor::black:
+            result = open_spiel::chess::Color::kBlack;
+            break;
+        case PieceColor::white:
+            result = open_spiel::chess::Color::kWhite;
+            break;
+        case PieceColor::empty:
+            result = open_spiel::chess::Color::kEmpty;
+            break;
+        default:
+            throw std::logic_error("Conversion failure from RBCAgent::PieceColor to open_spiel::chess::Color!");
+    }
+    return result;
 }
 
 RBCAgent::PieceColor RBCAgent::OpenSpielColor_to_RBCColor
@@ -66,6 +82,23 @@ RBCAgent::PieceColor RBCAgent::OpenSpielColor_to_RBCColor
     const open_spiel::chess::Color os_pC
 )
 {
+    PieceColor result;
+    switch(os_pC)
+    {
+        case open_spiel::chess::Color::kBlack:
+            result = PieceColor::black;
+            break;        
+        case open_spiel::chess::Color::kWhite:
+            result = PieceColor::white;
+            break;        
+        case open_spiel::chess::Color::kEmpty:
+            result = PieceColor::empty;
+            break;
+        default:
+            throw std::logic_error("Conversion failure from open_spiel::chess::Color to RBCAgent::PieceColor!");
+    }
+    return result;
+    
 }
 
 std::string RBCAgent::FullChessInfo::getFEN
@@ -209,6 +242,9 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
     const RBCAgent::PieceColor selfColor
 ) const
 {
+    if(selfColor == PieceColor::empty)
+        throw std::invalid_argument("selfColor must not be PieceColor::empty");
+    
     using CIS_Square = ChessInformationSet::Square;
     using CIS_CPI = ChessInformationSet::OnePlayerChessInfo;
     auto hypotheses = std::make_unique<std::vector<CIS_CPI>>();
@@ -244,358 +280,207 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
         CIS::Square from(move.from);
         CIS::Square to(move.to);
         CIS::PieceType pieceType = CIS::OpenSpielPieceType_to_CISPieceType(move.piece.type);
+        PieceColor moveColor = OpenSpielColor_to_RBCColor(move.piece.color);
         CIS::PieceType promPieceType = CIS::OpenSpielPieceType_to_CISPieceType(move.promotion_type);
+        bool castling = move.is_castling;
+        
+        hypotheses->push_back(piecesOpponent);
+        CIS::OnePlayerChessInfo& new_hypothese = hypotheses->back();
+        
+        // test for color match
+        if(moveColor!=opponentColor)
+            throw std::logic_error("Opponent move color mismatch!");
+        
+        //process possible promotion of pawn
+        if(promPieceType==CIS::PieceType::empty)
+        {
+            bool isPromotion=false;
+            if(pieceType==CIS::PieceType::pawn)
+            {
+                if(moveColor==PieceColor::white)
+                {
+                    if(to.row==CIS::ChessRow::eight)
+                        isPromotion=true;
+                }
+                else
+                {
+                    if(to.row==CIS::ChessRow::one)
+                        isPromotion=true;
+                }
+            }
+            if(isPromotion)
+                throw std::logic_error("Error in received legal move: Pawn at end but no promotion!");
+        }
+        if(promPieceType!=CIS::PieceType::empty)
+        {
+            if(castling)
+                throw std::logic_error("Castling and Promotion in one move not possible!");
+            if(pieceType!=CIS::PieceType::pawn)
+                throw std::logic_error("Non pawn piece can not be promoted!");
+            if(promPieceType==CIS::PieceType::pawn || promPieceType==CIS::PieceType::king)
+                throw std::logic_error("Piece can not be promoted to a pawn or a king!");
+            if(pieceType==CIS::PieceType::pawn)
+            {
+                if(moveColor==PieceColor::white)
+                {
+                    if(to.row!=CIS::ChessRow::eight || from.row!=CIS::ChessRow::seven)
+                        throw std::logic_error("False from and to squares for promotion!");
+                }
+                else
+                {
+                    if(to.row!=CIS::ChessRow::one || from.row!=CIS::ChessRow::two)
+                        throw std::logic_error("False from and to squares for promotion!");
+                }
+            }
+            
+            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> pawnGetter = new_hypothese.getPieceIter(new_hypothese.pawns);
+            
+            auto pawnIter = pawnGetter(from);
+            if(pawnIter==new_hypothese.pawns.end())
+                throw std::logic_error("Pawn moves from position where it does not sit!");
+            
+            new_hypothese.pawns.erase(pawnIter);
+            switch(promPieceType)
+            {
+                case CIS::PieceType::knight:
+                    new_hypothese.knights.push_back(to);
+                    break;
+                case CIS::PieceType::bishop:
+                    new_hypothese.bishops.push_back(to);
+                    break;
+                case CIS::PieceType::rook:
+                    new_hypothese.rooks.push_back(to);
+                    break;
+                case CIS::PieceType::queen:
+                    new_hypothese.queens.push_back(to);
+                    break;
+                default:
+                    throw std::logic_error("Piece promoted to non valid piece type!");
+            }
+            new_hypothese.no_progress_count=0;
+            
+            continue;
+        }
+        
+        //process possible castling
+        if(castling)
+        {
+           enum Castling {queenside,kingside};
+            Castling side;
+            
+            if(pieceType!=CIS::PieceType::king)
+                throw std::logic_error("Castling but king not moved!");            
+            if(new_hypothese.kings.size()!=1)
+                throw std::logic_error("There must be exactly one king!");
+            CIS::Square& theKing = new_hypothese.kings[0];
+            theKing = to;
+            CIS::Square rookDest = to;
+            
+            if(from.column < to.column)
+            {
+                rookDest.horizMinus(1);
+                side = Castling::kingside;
+                if(!new_hypothese.kingside)
+                    throw std::logic_error("Castling move kingside but illegal!");
+            }
+            else if(from.column > to.column)
+            {
+                rookDest.horizPlus(1);               
+                side = Castling::queenside;
+                if(!new_hypothese.queenside)
+                    throw std::logic_error("Castling move queenside but illegal!");
+            }
+            else
+                throw std::logic_error("No movement in castling!");
+            
+            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> rookGetter = new_hypothese.getPieceIter(new_hypothese.rooks);
+            
+            auto rookIter = new_hypothese.rooks.end();
+            if(side==Castling::kingside)
+                rookIter = rookGetter({CIS::ChessColumn::H,theKing.row});
+            else
+                rookIter = rookGetter({CIS::ChessColumn::A,theKing.row});            
+            if(rookIter==new_hypothese.rooks.end())
+                throw std::logic_error("No rook on initial position in castling move!");
+
+            *rookIter = rookDest;
+            
+            new_hypothese.kingside=false;
+            new_hypothese.queenside=false;
+
+            continue;
+        }
+        
+        //process all other movement
+        if(pieceType==CIS::PieceType::pawn)
+        {
+            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> pawnGetter = new_hypothese.getPieceIter(new_hypothese.pawns);
+            int step = static_cast<int>(to.row)-static_cast<int>(from.row);
+            uint stepSize = std::abs(step);
+            bool doubleStep = (stepSize==2)?true:false;
+            if(stepSize!=1 && stepSize!=2)
+                throw std::logic_error("Pawn must move eiter one or two steps forward!");
+            auto pawnIter = pawnGetter(from);
+            if(pawnIter==new_hypothese.pawns.end())
+                throw std::logic_error("Moved pawn from nonexistant position!");
+            *pawnIter = to;
+            if(doubleStep)
+            {
+                CIS::Square en_passant_sq = from;
+                (step<0)?en_passant_sq.vertMinus(1):en_passant_sq.vertPlus(1);
+                new_hypothese.en_passant.push_back(en_passant_sq);
+            }
+        }
+        else if(pieceType==CIS::PieceType::rook)
+        {
+            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> rookGetter = new_hypothese.getPieceIter(new_hypothese.rooks);
+            auto rookIter = rookGetter(from);
+            if(rookIter==new_hypothese.rooks.end())
+                throw std::logic_error("Moved rook from nonexistant position!");
+            if(from.row==CIS::ChessRow::one || from.row==CIS::ChessRow::eight)
+            {
+                if(from.column==CIS::ChessColumn::A)
+                    new_hypothese.queenside=false;
+                if(from.column==CIS::ChessColumn::H)
+                    new_hypothese.kingside=false;
+            }
+            *rookIter = to;
+        }
+        else if(pieceType==CIS::PieceType::knight)
+        {
+            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> knightGetter = new_hypothese.getPieceIter(new_hypothese.knights);
+            auto knightIter = knightGetter(from);
+            if(knightIter==new_hypothese.knights.end())
+                throw std::logic_error("Moved knight from nonexistant position!");
+            *knightIter = to;
+        }
+        else if(pieceType==CIS::PieceType::bishop)
+        {
+            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> bishopGetter = new_hypothese.getPieceIter(new_hypothese.bishops);
+            auto bishopIter = bishopGetter(from);
+            if(bishopIter==new_hypothese.bishops.end())
+                throw std::logic_error("Moved bishop from nonexistant position!");
+            *bishopIter = to;
+        }
+        else if(pieceType==CIS::PieceType::queen)
+        {
+            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> queenGetter = new_hypothese.getPieceIter(new_hypothese.queens);
+            auto queenIter = queenGetter(from);
+            if(queenIter==new_hypothese.queens.end())
+                throw std::logic_error("Moved queen from nonexistant position!");
+            *queenIter = to; 
+        }
+        else if(pieceType==CIS::PieceType::king)
+        {
+            if(new_hypothese.kings.size()!=1)
+                throw std::logic_error("There must be exactly one king!");
+            CIS::Square& theKing = new_hypothese.kings[0];
+            theKing = to;
+            CIS::Square rookDest = to;
+            new_hypothese.kingside=false;
+            new_hypothese.queenside=false;
+        }
     }
-    
-    //open_spiel::chess::Move ActionToMove(Action action)
-    
-    
-    
-    
-    /*
-    std::function<bool(const CIS_Square&)> piecesSelfBlock = piecesSelf.getBlockCheck();
-    std::function<bool(const CIS_Square&)> piecesOppoBlock = piecesOpponent.getBlockCheck();
-    
-    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
-    pawnLegalMoves = [&](const CIS_Square& sq)
-    {
-        bool hasNotMoved=false;
-        if(selfColor == PieceColor::white)
-        {
-            if(sq.row == ChessInformationSet::ChessRow::one)
-                std::logic_error("white pawn can not be on row one");
-            else if(sq.row == ChessInformationSet::ChessRow::two)
-                hasNotMoved=true;
-        }
-        else
-        {
-            if(sq.row == ChessInformationSet::ChessRow::eight)
-                std::logic_error("black pawn can not be on row eight");
-            else if(sq.row == ChessInformationSet::ChessRow::seven)
-                hasNotMoved=true;
-        }
-        
-        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
-        if(selfColor == PieceColor::white)
-        {
-            // Non capturing moves
-            CIS_Square oneForw(sq);
-            if(oneForw.vertPlus(1) && !piecesSelfBlock(oneForw) && !piecesOppoBlock(oneForw))
-            {
-                legalDestinations->push_back(oneForw);
-                if(hasNotMoved && oneForw.vertPlus(1) && !piecesSelfBlock(oneForw) && !piecesOppoBlock(oneForw))
-                    legalDestinations->push_back(oneForw);
-            }
-            
-            // Capturing moves
-            CIS_Square captu(sq);
-            if(captu.diagVertPlusHorizMinus(1) && piecesSelfBlock(captu))
-                legalDestinations->push_back(captu);
-            captu = sq;
-            if(captu.diagVertPlusHorizPlus(1) && piecesSelfBlock(captu))
-                legalDestinations->push_back(captu);
-        }
-        else
-        {
-            // Non capturing moves
-            CIS_Square oneForw(sq);
-            if(oneForw.vertMinus(1) && !piecesSelfBlock(oneForw) && !piecesOppoBlock(oneForw))
-            {
-                legalDestinations->push_back(oneForw);
-                if(hasNotMoved && oneForw.vertMinus(1) && !piecesSelfBlock(oneForw) && !piecesOppoBlock(oneForw))
-                    legalDestinations->push_back(oneForw);
-            }
-            
-            // Capturing moves
-            CIS_Square captu(sq);
-            if(captu.diagVertMinusHorizMinus(1) && piecesSelfBlock(captu))
-                legalDestinations->push_back(captu);
-            captu = sq;
-            if(captu.diagVertMinusHorizPlus(1) && piecesSelfBlock(captu))
-                legalDestinations->push_back(captu);
-        }
-        return legalDestinations;
-    };
-    
-    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
-    rookLegalMoves = [&](const CIS_Square& sq)
-    {       
-        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
-        
-        std::array<CIS_Square,4> moveFront = {sq,sq,sq,sq};        
-        std::bitset<4> moveFrontBlocked(0000);
-        while(!moveFrontBlocked.all())
-        {
-            if(!moveFrontBlocked[0] && moveFront[0].vertPlus(1) && !piecesOppoBlock(moveFront[0]))
-            {
-                legalDestinations->push_back(moveFront[0]);
-                if(piecesSelfBlock(moveFront[0]))
-                    moveFrontBlocked[0]=true;
-            }
-            else
-                moveFrontBlocked[0]=true;
-
-            if(!moveFrontBlocked[1] && moveFront[1].vertMinus(1) && !piecesOppoBlock(moveFront[1]))
-            {
-                legalDestinations->push_back(moveFront[1]);
-                if(piecesSelfBlock(moveFront[1]))
-                    moveFrontBlocked[1]=true;
-            }
-            else
-                moveFrontBlocked[1]=true;
-          
-            if(!moveFrontBlocked[2] && moveFront[2].horizPlus(1) && !piecesOppoBlock(moveFront[2]))
-            {
-                legalDestinations->push_back(moveFront[2]);
-                if(piecesSelfBlock(moveFront[2]))
-                    moveFrontBlocked[2]=true;
-            }
-            else
-                moveFrontBlocked[2]=true;
-                
-            if(!moveFrontBlocked[3] && moveFront[3].horizMinus(1) && !piecesOppoBlock(moveFront[3]))
-            {
-                legalDestinations->push_back(moveFront[3]);
-                if(piecesSelfBlock(moveFront[3]))
-                    moveFrontBlocked[3]=true;
-            }
-            else
-                moveFrontBlocked[3]=true;
-        }
-        return legalDestinations;
-    };
-
-    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
-    knightLegalMoves = [&](const CIS_Square& sq)
-    {       
-        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
-        
-        std::array<CIS_Square,8> moveFront = {sq,sq,sq,sq,sq,sq,sq,sq};        
-
-        if(moveFront[0].knightVertPlusHorizPlus() && !piecesOppoBlock(moveFront[0]))
-            legalDestinations->push_back(moveFront[0]);
-
-        if(moveFront[1].knightVertPlusHorizMinus() && !piecesOppoBlock(moveFront[1]))
-            legalDestinations->push_back(moveFront[1]);
-        
-        if(moveFront[2].knightVertMinusHorizPlus() && !piecesOppoBlock(moveFront[2]))
-            legalDestinations->push_back(moveFront[2]);
-            
-        if(moveFront[3].knightVertMinusHorizMinus() && !piecesOppoBlock(moveFront[3]))
-            legalDestinations->push_back(moveFront[3]);
-        
-        if(moveFront[4].knightHorizPlusVertPlus() && !piecesOppoBlock(moveFront[4]))
-            legalDestinations->push_back(moveFront[4]);
-
-        if(moveFront[5].knightHorizPlusVertMinus() && !piecesOppoBlock(moveFront[5]))
-            legalDestinations->push_back(moveFront[5]);
-        
-        if(moveFront[6].knightHorizMinusVertPlus() && !piecesOppoBlock(moveFront[6]))
-            legalDestinations->push_back(moveFront[6]);
-            
-        if(moveFront[7].knightHorizMinusVertMinus() && !piecesOppoBlock(moveFront[7]))
-            legalDestinations->push_back(moveFront[7]);
-        
-        return legalDestinations;        
-    };
-    
-    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
-    bishopLegalMoves = [&](const CIS_Square& sq)
-    {       
-        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
-        
-        std::array<CIS_Square,4> moveFront = {sq,sq,sq,sq};        
-        std::bitset<4> moveFrontBlocked(0000);
-        while(!moveFrontBlocked.all())
-        {
-            if(!moveFrontBlocked[0] && moveFront[0].diagVertPlusHorizPlus(1) && !piecesOppoBlock(moveFront[0]))
-            {
-                legalDestinations->push_back(moveFront[0]);
-                if(piecesSelfBlock(moveFront[0]))
-                    moveFrontBlocked[0]=true;
-            }
-            else
-                moveFrontBlocked[0]=true;
-
-            if(!moveFrontBlocked[1] && moveFront[1].diagVertMinusHorizPlus(1) && !piecesOppoBlock(moveFront[1]))
-            {
-                legalDestinations->push_back(moveFront[1]);
-                if(piecesSelfBlock(moveFront[1]))
-                    moveFrontBlocked[1]=true;
-            }
-            else
-                moveFrontBlocked[1]=true;
-          
-            if(!moveFrontBlocked[2] && moveFront[2].diagVertPlusHorizMinus(1) && !piecesOppoBlock(moveFront[2]))
-            {
-                legalDestinations->push_back(moveFront[2]);
-                if(piecesSelfBlock(moveFront[2]))
-                    moveFrontBlocked[2]=true;
-            }
-            else
-                moveFrontBlocked[2]=true;
-                
-            if(!moveFrontBlocked[3] && moveFront[3].diagVertMinusHorizMinus(1) && !piecesOppoBlock(moveFront[3]))
-            {
-                legalDestinations->push_back(moveFront[3]);
-                if(piecesSelfBlock(moveFront[3]))
-                    moveFrontBlocked[3]=true;
-            }
-            else
-                moveFrontBlocked[3]=true;
-        }
-        return legalDestinations;
-    };
-    
-    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
-    queenLegalMoves = [&](const CIS_Square& sq)
-    {       
-        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
-        
-        std::array<CIS_Square,8> moveFront = {sq,sq,sq,sq,sq,sq,sq,sq};        
-        std::bitset<8> moveFrontBlocked(00000000);
-        while(!moveFrontBlocked.all())
-        {
-            if(!moveFrontBlocked[0] && moveFront[0].vertPlus(1) && !piecesOppoBlock(moveFront[0]))
-            {
-                legalDestinations->push_back(moveFront[0]);
-                if(piecesSelfBlock(moveFront[0]))
-                    moveFrontBlocked[0]=true;
-            }
-            else
-                moveFrontBlocked[0]=true;
-
-            if(!moveFrontBlocked[1] && moveFront[1].vertMinus(1) && !piecesOppoBlock(moveFront[1]))
-            {
-                legalDestinations->push_back(moveFront[1]);
-                if(piecesSelfBlock(moveFront[1]))
-                    moveFrontBlocked[1]=true;
-            }
-            else
-                moveFrontBlocked[1]=true;
-          
-            if(!moveFrontBlocked[2] && moveFront[2].horizPlus(1) && !piecesOppoBlock(moveFront[2]))
-            {
-                legalDestinations->push_back(moveFront[2]);
-                if(piecesSelfBlock(moveFront[2]))
-                    moveFrontBlocked[2]=true;
-            }
-            else
-                moveFrontBlocked[2]=true;
-                
-            if(!moveFrontBlocked[3] && moveFront[3].horizMinus(1) && !piecesOppoBlock(moveFront[3]))
-            {
-                legalDestinations->push_back(moveFront[3]);
-                if(piecesSelfBlock(moveFront[3]))
-                    moveFrontBlocked[3]=true;
-            }
-            else
-                moveFrontBlocked[3]=true;
-            
-            if(!moveFrontBlocked[4] && moveFront[4].diagVertPlusHorizPlus(1) && !piecesOppoBlock(moveFront[4]))
-            {
-                legalDestinations->push_back(moveFront[4]);
-                if(piecesSelfBlock(moveFront[4]))
-                    moveFrontBlocked[4]=true;
-            }
-            else
-                moveFrontBlocked[4]=true;
-
-            if(!moveFrontBlocked[5] && moveFront[5].diagVertMinusHorizPlus(1) && !piecesOppoBlock(moveFront[5]))
-            {
-                legalDestinations->push_back(moveFront[5]);
-                if(piecesSelfBlock(moveFront[5]))
-                    moveFrontBlocked[5]=true;
-            }
-            else
-                moveFrontBlocked[5]=true;
-          
-            if(!moveFrontBlocked[6] && moveFront[6].diagVertPlusHorizMinus(1) && !piecesOppoBlock(moveFront[6]))
-            {
-                legalDestinations->push_back(moveFront[6]);
-                if(piecesSelfBlock(moveFront[6]))
-                    moveFrontBlocked[6]=true;
-            }
-            else
-                moveFrontBlocked[6]=true;
-                
-            if(!moveFrontBlocked[7] && moveFront[7].diagVertMinusHorizMinus(1) && !piecesOppoBlock(moveFront[7]))
-            {
-                legalDestinations->push_back(moveFront[7]);
-                if(piecesSelfBlock(moveFront[7]))
-                    moveFrontBlocked[7]=true;
-            }
-            else
-                moveFrontBlocked[7]=true;
-        }
-        return legalDestinations;
-    };
-    
-    std::function<std::unique_ptr<std::vector<CIS_Square>>(const CIS_Square&)>
-    kingLegalMoves = [&](const CIS_Square& sq)
-    {       
-        auto legalDestinations = std::make_unique<std::vector<CIS_Square>>();
-        
-        std::array<CIS_Square,8> moveFront = {sq,sq,sq,sq,sq,sq,sq,sq};        
-
-        if(moveFront[0].vertPlus(1) && !piecesOppoBlock(moveFront[0]))
-            legalDestinations->push_back(moveFront[0]);
-
-        if(moveFront[1].vertMinus(1) && !piecesOppoBlock(moveFront[1]))
-            legalDestinations->push_back(moveFront[1]);
-        
-        if(moveFront[2].horizPlus(1) && !piecesOppoBlock(moveFront[2]))
-            legalDestinations->push_back(moveFront[2]);
-            
-        if(moveFront[3].horizMinus(1) && !piecesOppoBlock(moveFront[3]))
-            legalDestinations->push_back(moveFront[3]);
-        
-        if(moveFront[4].diagVertPlusHorizPlus(1) && !piecesOppoBlock(moveFront[4]))
-            legalDestinations->push_back(moveFront[4]);
-
-        if(moveFront[5].diagVertMinusHorizPlus(1) && !piecesOppoBlock(moveFront[5]))
-            legalDestinations->push_back(moveFront[5]);
-        
-        if(moveFront[6].diagVertPlusHorizMinus(1) && !piecesOppoBlock(moveFront[6]))
-            legalDestinations->push_back(moveFront[6]);
-            
-        if(moveFront[7].diagVertMinusHorizMinus(1) && !piecesOppoBlock(moveFront[7]))
-            legalDestinations->push_back(moveFront[7]);
-        
-        return legalDestinations;
-    };
-    
-    //hypotheses for every figure movement
-    for(std::uint8_t pieceInd=0; pieceInd<piecesOpponent.data.size(); pieceInd++)
-    {
-        const std::pair<CIS_Square,bool>& onePiece = piecesOpponent.data[pieceInd];
-        if(onePiece.second)
-        {
-            std::unique_ptr<std::vector<CIS_Square>> posMoves;
-            if(pieceInd<8)
-                posMoves = pawnLegalMoves(onePiece.first);
-            else if(pieceInd==8 || pieceInd==15)
-                posMoves = rookLegalMoves(onePiece.first);
-            else if(pieceInd==9 || pieceInd==14)
-                posMoves = knightLegalMoves(onePiece.first);
-            else if(pieceInd==10 || pieceInd==13)
-                posMoves = bishopLegalMoves(onePiece.first);
-            else if(pieceInd==11)
-                posMoves = queenLegalMoves(onePiece.first);
-            else if(pieceInd==12)
-                posMoves = kingLegalMoves(onePiece.first);
-        
-            std::vector<CIS_CPI> onePieceHypotheses(posMoves->size());
-            for(unsigned int moveInd=0;moveInd<posMoves->size();moveInd++)
-            {
-                onePieceHypotheses[moveInd] = piecesOpponent;
-                onePieceHypotheses[moveInd].data[pieceInd].first = (*posMoves)[moveInd];
-            }
-            hypotheses->insert(hypotheses->end(),onePieceHypotheses.begin(),onePieceHypotheses.end());
-        }
-    } 
-    */
-    
     return hypotheses;
 }
 

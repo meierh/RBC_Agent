@@ -113,7 +113,7 @@ std::function<bool(const ChessInformationSet::Square&)> ChessInformationSet::One
     return [&](const Square& sq){return this->squareToPieceMap.find(sq)!=this->squareToPieceMap.end();};
 }
 
-std::function<std::pair<bool,ChessInformationSet::PieceType>(ChessInformationSet::Square)> ChessInformationSet::OnePlayerChessInfo::getSquarePieceTypeCheck()
+std::function<std::pair<bool,ChessInformationSet::PieceType>(const ChessInformationSet::Square&)> ChessInformationSet::OnePlayerChessInfo::getSquarePieceTypeCheck()
 {
     squareToPieceMap.clear();
     auto insert = [&](const std::vector<ChessInformationSet::Square>& pieces, const PieceType pT)
@@ -148,6 +148,27 @@ std::function<std::pair<bool,ChessInformationSet::PieceType>(ChessInformationSet
     };
     
     return squarePieceTypeCheck;
+}
+
+std::function<std::vector<ChessInformationSet::Square>::iterator(const ChessInformationSet::Square&)> ChessInformationSet::OnePlayerChessInfo::getPieceIter
+(
+    std::vector<ChessInformationSet::Square>& onePieceType
+)
+{
+    squareToPieceIter.clear();
+    for(auto iter=onePieceType.begin(); iter!=onePieceType.end(); iter++)
+    {
+        squareToPieceIter[*iter] = iter;
+    }
+
+    return [&](const Square& sq)
+        {
+            auto iter = this->squareToPieceIter.find(sq);
+            if(iter==this->squareToPieceIter.end())
+                return onePieceType.end();
+            else
+                return iter->second;
+        };
 }
 
 void ChessInformationSet::setBoard

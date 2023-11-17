@@ -540,3 +540,11 @@ if (BACKEND_TORCH)
     set_property(TARGET ${PROJECT_NAME} PROPERTY CXX_STANDARD 14)
     target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}")
 endif()
+
+### Unit Tests Helge Meier RBC ###
+# Locate GTest
+#find_package(GTest REQUIRED)
+#include_directories(${GTEST_INCLUDE_DIRS})
+
+#include(CTest)
+#add_executable(

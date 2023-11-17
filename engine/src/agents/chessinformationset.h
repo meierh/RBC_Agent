@@ -142,17 +142,21 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 // fifty move rule counter
                 std::uint8_t no_progress_count;
 
-                std::function<bool(const Square&)> getBlockCheck();
-                std::function<bool(const Square&)> getBlockCheck
+                std::function<bool(const ChessInformationSet::Square&)> getBlockCheck();
+                std::function<bool(const ChessInformationSet::Square&)> getBlockCheck
                 (
                     const std::vector<ChessInformationSet::Square>& onePieceType,
                     const PieceType pT
+                );                
+                std::function<std::pair<bool,PieceType>(const ChessInformationSet::Square&)> getSquarePieceTypeCheck();
+                std::function<std::vector<ChessInformationSet::Square>::iterator(const ChessInformationSet::Square&)> getPieceIter
+                (
+                    std::vector<ChessInformationSet::Square>& onePieceType
                 );
-                
-                std::function<std::pair<bool,PieceType>(Square)> getSquarePieceTypeCheck();
                 
             private:
                 std::unordered_map<Square,PieceType,Square::Hasher> squareToPieceMap;
+                std::unordered_map<Square,std::vector<ChessInformationSet::Square>::iterator,Square::Hasher> squareToPieceIter;
         };
         
         class BoardClause

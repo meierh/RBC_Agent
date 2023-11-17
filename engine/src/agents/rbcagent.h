@@ -54,7 +54,7 @@ class RBCAgent : public MCTSAgentBatch
     
 private:   
     enum Player {Self, Opponent};
-    enum PieceColor {white,black};
+    enum PieceColor {white=0,black=1,empty=-1};
     static open_spiel::chess::Color AgentColor_to_OpenSpielColor(const PieceColor agent_pC);
     static PieceColor OpenSpielColor_to_RBCColor(const open_spiel::chess::Color os_pC);
     
