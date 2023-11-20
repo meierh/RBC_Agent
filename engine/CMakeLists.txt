@@ -543,8 +543,9 @@ endif()
 
 ### Unit Tests Helge Meier RBC ###
 # Locate GTest
-#find_package(GTest REQUIRED)
-#include_directories(${GTEST_INCLUDE_DIRS})
-
-#include(CTest)
-#add_executable(
+find_package(GTest REQUIRED)
+include_directories(${GTEST_INCLUDE_DIRS})
+file(GLOB source_files "unittest/unittests.cpp")
+add_executable(unittests ${source_files})
+target_link_libraries(unittests ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES})
+gtest_discover_tests(unittests)
