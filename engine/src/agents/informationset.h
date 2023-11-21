@@ -28,6 +28,8 @@
 #ifndef INFORMATIONSET_H
 #define INFORMATIONSET_H
 
+#include <gtest/gtest.h>
+#include <iostream>
 #include <cassert>
 #include <memory>
 #include <cstdint>
@@ -43,17 +45,21 @@ template<std::uint64_t numberBitsPerItem>
 class InformationSet
 {
     public:
-        InformationSet(std::uint64_t initialSize=1)
+        InformationSet(std::uint64_t initialCapacity=1):
+        infoSetSize(0),
+        infoSetCapacity(initialCapacity)
         {
             numberBytesPerItem = numberBitsPerItem / (sizeof(std::uint8_t)*8);
             unusedBitsPerItem = sizeof(std::uint8_t)*8 - (numberBitsPerItem % (sizeof(std::uint8_t)*8));
             unusedBitsPerItem %= sizeof(std::uint8_t)*8;
             if(unusedBitsPerItem != 0)
                 numberBytesPerItem++;
+            
+            if(infoSetCapacity<1)
+                infoSetCapacity=1;
     
-            infoSet = std::make_unique<std::uint8_t[]>(numberBytesPerItem*initialSize);
-            infoSetSize = initialSize;
-            infoSetCapacity = initialSize;
+            infoSet = std::make_unique<std::uint8_t[]>(numberBytesPerItem*infoSetCapacity);
+            //std::cout<<"Constructed"<<std::endl;
         };
         
         std::uint64_t size() const
@@ -63,12 +69,14 @@ class InformationSet
         
         void add(const std::bitset<numberBitsPerItem>& item)
         {
-            std::bitset<numberBitsPerItem> itemCp = item;
-            add({itemCp});
+            //std::cout<<"Add single"<<std::endl;
+            const std::vector<std::bitset<numberBitsPerItem>> items = {item};
+            add(items);
         };
         
         void add(const std::vector<std::bitset<numberBitsPerItem>>& items)
         {
+            //std::cout<<"Add multi"<<std::endl;
             std::uint64_t validItemsNumber = infoSetSize-removedBoards.size();
             bool expandInfoSet=false;
             while(validItemsNumber+items.size() > infoSetCapacity)
@@ -76,9 +84,10 @@ class InformationSet
                 infoSetCapacity*=2;
                 expandInfoSet=true;
             }
+            //std::cout<<"Expand:"<<expandInfoSet<<std::endl;
             if(expandInfoSet)
             {
-                std::unique_ptr<std::uint8_t[]> prevInfoSet = infoSet;
+                std::unique_ptr<std::uint8_t[]> prevInfoSet = std::move(infoSet);
                 infoSet = std::make_unique<std::uint8_t[]>(numberBytesPerItem*infoSetCapacity);
                 std::uint64_t newInfoSetIndex=0;
                 for(std::uint64_t index=0; index<infoSetSize; index++)
@@ -237,30 +246,40 @@ class InformationSet
             }
         };
         
+        /* Set the bit on variable with leftShift counted as 
+         * [...,4,3,2,1,0] 
+         */
         template<typename T>
         void setBit(T& variable,unsigned int leftShift) const
         {
-            T one = 1;
+            if(leftShift>30)
+                throw std::invalid_argument("set Bit must be limited to <= 30");
             variable |= (1<<leftShift);
         };
 
+        /* Unset the bit on variable with leftShift counted as 
+         * [...,4,3,2,1,0] 
+         */
         template<typename T>
         void unsetBit(T& variable,unsigned int leftShift) const
         {
-            T zero = 1;
-            zero <<= leftShift;
-            zero != zero;
-            variable &= zero;
+            if(leftShift>30)
+                throw std::invalid_argument("unset Bit must be limited to <= 30");
+            variable &= ~(1<<leftShift);
         };
 
+        /* Get the bit on variable with leftShift counted as 
+         * [...,4,3,2,1,0] 
+         */
         template<typename T>
         bool getBit(const T variable,unsigned int leftShift) const
         {
-            T one = 1;
-            one <<= leftShift;
-            return variable | one;
+            if(leftShift>30)
+                throw std::invalid_argument("get Bit must be limited to <= 30");
+            return variable & (1<<leftShift);
         };
 
+        /*
         template<typename T>
         void assignBitPattern(T& variable,unsigned int leftShift,T value,unsigned int size) const
         {
@@ -278,7 +297,9 @@ class InformationSet
                 }
             }
         };
+        */
         
+        /*
         template<typename T>
         T extractBitPattern(T variable,unsigned int leftShift,unsigned int size) const
         {
@@ -290,6 +311,7 @@ class InformationSet
             variable >>= leftShift;
             return variable & ones;
         };
+        */
         
         template<typename T>
         void assignBitPattern
@@ -305,7 +327,6 @@ class InformationSet
                 variable[i+startIndex] = getBit(value,size-1-i);
             }
         };
-        
         
         template<typename T>
         T transferBitPattern
@@ -351,7 +372,7 @@ class InformationSet
             }
             return result;
         };
-
+        
         friend class IS_Iterator;
 
         class IS_Iterator
@@ -392,7 +413,7 @@ class InformationSet
                     else
                     {
                         current_Item++;
-                        while(removedBoards.find(current_Item)!=removedBoards.end())
+                        while(is->removedBoards.find(current_Item)!=is->removedBoards.end())
                             current_Item++;
                     
                         if(current_Item>=is->infoSetSize)
@@ -474,6 +495,14 @@ class InformationSet
         std::uint64_t numberBytesPerItem;
         std::uint64_t unusedBitsPerItem;
         std::set<std::uint64_t> removedBoards;
+        
+        FRIEND_TEST(informationset_test, setBit_test);
+        FRIEND_TEST(informationset_test, unsetBit_test);
+        FRIEND_TEST(informationset_test, getBit_test);
+        FRIEND_TEST(informationset_test, assignBitPattern_test);
+
+        FRIEND_TEST(informationset_test, readWriteIteratorComp_test);
+        FRIEND_TEST(informationset_test, readWriteIndexComp_test);
 };
 }
 
