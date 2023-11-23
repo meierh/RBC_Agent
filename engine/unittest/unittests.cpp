@@ -108,16 +108,40 @@ TEST(informationset_test, getBit_test)
 TEST(informationset_test, assignBitPattern_test)
 {
     InformationSet<bitSize> ifs;   
-    std::uint64_t var = 0x900;
+    std::uint64_t var = 0x00F;
     std::bitset<bitSize> bits;
-    ifs.assignBitPattern<std::uint64_t>(bits,7,var,8);
-    EXPECT_EQ(var,0x96D);
-    var = 0;
-    ifs.assignBitPattern<std::uint64_t>(var,0,0x1,1);
-    EXPECT_EQ(var,1);
-    ifs.assignBitPattern<std::uint64_t>(var,1,0x1,1);
-    EXPECT_EQ(var,2);
-    */
+    ifs.assignBitPattern<std::uint64_t>(bits,0,var,4);
+    EXPECT_EQ(bits,std::bitset<bitSize>({0x000000F}));
+    
+    var = 0x0FA;
+    ifs.assignBitPattern<std::uint64_t>(bits,20,var,8);
+    EXPECT_EQ(bits,std::bitset<bitSize>({0x5F0000F}));
+    
+    var = 0x1357;
+    ifs.assignBitPattern<std::uint64_t>(bits,4,var,16);
+    EXPECT_EQ(bits,std::bitset<bitSize>({0x5FEAC8F}));
+    
+    var = 0x0000;
+    ifs.assignBitPattern<std::uint64_t>(bits,30,var,16);
+    EXPECT_EQ(bits,std::bitset<bitSize>({0x5FEAC8F}));
+}
+
+TEST(informationset_test, transferBitPattern_test)
+{
+    InformationSet<bitSize> ifs;   
+    std::bitset<bitSize> bits({0x5FEAC8F});
+    EXPECT_EQ(ifs.transferBitPattern<std::uint64_t>(bits,0,4),0xF);
+    EXPECT_EQ(ifs.transferBitPattern<std::uint64_t>(bits,4,4),0x1);    
+    EXPECT_EQ(ifs.transferBitPattern<std::uint64_t>(bits,24,12),0xA00);
+}
+
+TEST(informationset_test, transferBytePattern_test)
+{
+    InformationSet<bitSize> ifs;   
+    std::bitset<8> bits1({0x59});
+    EXPECT_EQ(ifs.transferBytePattern(bits1),0x9A);
+    std::bitset<8> bits2({0xC1});
+    EXPECT_EQ(ifs.transferBytePattern(bits2),0x83);    
 }
 
 TEST(informationset_test, writeSingleOnNonParam_test)
@@ -127,24 +151,24 @@ TEST(informationset_test, writeSingleOnNonParam_test)
     for(std::bitset<bitSize>& bitset : bitsets)
         ifs.add(bitset);
     EXPECT_EQ(ifs.size(), 32);
+    
+    ifs.add(bitsets);
+    EXPECT_EQ(ifs.size(), 64);
 }
 
-TEST(informationset_test, writeSingleOnZeroSize_test)
-{
-    crazyara::InformationSet<bitSize> ifs(0);
-    std::vector<std::bitset<bitSize>> bitsets(32,random_bitset<bitSize>(0.5));
-    for(std::bitset<bitSize>& bitset : bitsets)
-        ifs.add(bitset);
-    EXPECT_EQ(ifs.size(), 32);
-}
-
-TEST(informationset_test, writeSingleOnNonZeroSize_test)
+TEST(informationset_test, readWriteBits_test)
 {   
-    crazyara::InformationSet<bitSize> ifs(5);
-    std::vector<std::bitset<bitSize>> bitsets(32,random_bitset<bitSize>(0.5));
-    for(std::bitset<bitSize>& bitset : bitsets)
-        ifs.add(bitset);
-    EXPECT_EQ(ifs.size(), 32);
+    crazyara::InformationSet<bitSize> ifs;
+    std::vector<std::bitset<bitSize>> bitsets(10,std::bitset<bitSize>(0));
+    ifs.add(bitsets);
+    EXPECT_EQ(ifs.size(), 10);
+    EXPECT_EQ(*(ifs.getBitPattern(2)),std::bitset<bitSize>(0x0));
+    
+    /*
+    std::bitset<bitSize> bits({0x5FEAC8F});
+    ifs.setBitPattern(2,bits);
+    EXPECT_EQ(*(ifs.getBitPattern(2)),bits);
+    */
 }
 
 /*
@@ -177,6 +201,7 @@ TEST(informationset_test, readWriteIndexComp_test)
     }
 }
 */
+
 };
 
 int main(int argc, char **argv)

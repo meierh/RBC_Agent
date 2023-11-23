@@ -59,14 +59,14 @@ class InformationSet
                 infoSetCapacity=1;
     
             infoSet = std::make_unique<std::uint8_t[]>(numberBytesPerItem*infoSetCapacity);
-            //std::cout<<"Constructed"<<std::endl;
+            std::cout<<"Created: "<<numberBytesPerItem*infoSetCapacity<<std::endl;
         };
         
         std::uint64_t size() const
         {
             return infoSetSize;            
         };
-        
+
         void add(const std::bitset<numberBitsPerItem>& item)
         {
             //std::cout<<"Add single"<<std::endl;
@@ -78,17 +78,20 @@ class InformationSet
         {
             //std::cout<<"Add multi"<<std::endl;
             std::uint64_t validItemsNumber = infoSetSize-removedBoards.size();
+            std::uint64_t necessaryNewSize = validItemsNumber+items.size();
             bool expandInfoSet=false;
-            while(validItemsNumber+items.size() > infoSetCapacity)
+            while(necessaryNewSize > infoSetCapacity)
             {
                 infoSetCapacity*=2;
                 expandInfoSet=true;
             }
-            //std::cout<<"Expand:"<<expandInfoSet<<std::endl;
+            //std::cout<<"Expand:"<<expandInfoSet<<"  infoSetCapacity:"<<infoSetCapacity<<"  infoSetSize:"<<infoSetSize<<"  necessaryNewSize:"<<necessaryNewSize<<std::endl;
             if(expandInfoSet)
             {
                 std::unique_ptr<std::uint8_t[]> prevInfoSet = std::move(infoSet);
                 infoSet = std::make_unique<std::uint8_t[]>(numberBytesPerItem*infoSetCapacity);
+                std::cout<<"Reallocated: "<<numberBytesPerItem*infoSetCapacity<<std::endl;
+
                 std::uint64_t newInfoSetIndex=0;
                 for(std::uint64_t index=0; index<infoSetSize; index++)
                 {
@@ -102,11 +105,11 @@ class InformationSet
                     }
                 }
                 removedBoards.clear();
+                infoSetSize = necessaryNewSize;
                 for(std::uint64_t index=0; index<items.size(); index++,newInfoSetIndex++)
                 {
                     setBitPattern(newInfoSetIndex,items[index]);
                 }
-                infoSetSize = newInfoSetIndex;
             }
             else
             {
@@ -119,12 +122,11 @@ class InformationSet
                     index++;
                     iter = removedBoards.erase(iter);
                 }
-                std::uint64_t newInfoSetIndex = infoSetSize;
-                for(; index<items.size(); index++,newInfoSetIndex++)
+                for(; index<items.size(); index++)
                 {
-                    setBitPattern(newInfoSetIndex,items[index]);
+                    infoSetSize++;
+                    setBitPattern(infoSetSize-1,items[index]);
                 }
-                infoSetSize = newInfoSetIndex;
             }
         };
         
@@ -199,7 +201,11 @@ class InformationSet
     protected:
         std::unique_ptr<std::vector<std::uint8_t>> getRawBitPattern(std::uint64_t index) const
         {
-            assert(index<infoSetSize);
+            std::cout<<"Get raw bit pattern from: "<<index<<std::endl;
+            if(index>=infoSetSize)
+                throw std::invalid_argument("Index larger than information set size "+
+                            std::to_string(index)+">="+std::to_string(infoSetSize));
+            
             auto bytes = std::make_unique<std::vector<std::uint8_t>>(numberBitsPerItem);
             std::uint64_t startByte = index*numberBytesPerItem;
             std::uint64_t ind=0;
@@ -213,9 +219,22 @@ class InformationSet
         
         std::unique_ptr<std::bitset<numberBitsPerItem>> getBitPattern(std::uint64_t index) const
         {
+            std::cout<<"Get bit pattern from: "<<index<<std::endl;
+            if(index>=infoSetSize)
+                throw std::invalid_argument("Index larger than information set size "+
+                            std::to_string(index)+">="+std::to_string(infoSetSize));
+            
             auto bitPattern = std::make_unique<std::bitset<numberBitsPerItem>>();
             std::unique_ptr<std::vector<std::uint8_t>> bytes = getRawBitPattern(index);
             std::vector<std::uint8_t>& item = *bytes;
+            for(std::uint64_t index = 0; index<numberBytesPerItem; index++)
+            {
+                std::uint8_t& value = item[index];
+                std::cout<<index<<":"<<unsigned(value)<<"|";
+            }
+            std::cout<<"\b\b"<<*bitPattern;
+            std::cout<<std::endl;
+        
             
             std::uint64_t byteInd;
             std::uint64_t bitInd;
@@ -226,14 +245,25 @@ class InformationSet
                 bitInd = totalInd % sizeof(std::uint8_t)*8;
                 (*bitPattern)[bitPatInd] = getBit<std::uint8_t>(item[byteInd],7-bitInd);
             }
+            std::cout<<"bitPattern:"<<*bitPattern<<std::endl;
             return bitPattern;
         };
         
         void setBitPattern(std::uint64_t index,const std::bitset<numberBitsPerItem>& bitPattern)
         {
+            std::cout<<"Set bit pattern to: "<<index<<std::endl;
+            if(index>=infoSetSize)
+                throw std::invalid_argument("Index larger than information set size "+
+                            std::to_string(index)+">="+std::to_string(infoSetSize));
+
             std::vector<bool> bits(bitPattern.size()+unusedBitsPerItem,false);
             for(unsigned int bitInd=0; bitInd<bitPattern.size(); bitInd++)
                 bits[bitInd+unusedBitsPerItem] = bitPattern[bitInd];
+            
+            
+            for(bool bit : bits)
+                std::cout<<bit;
+            std::cout<<std::endl;
             
             std::uint64_t startByte = index*numberBytesPerItem;
             std::uint64_t ind=0;
@@ -242,8 +272,16 @@ class InformationSet
                 std::bitset<8> byteSet;
                 for(int i=0;i<8;i++)
                     byteSet[i] = bits[i+ind];
-                infoSet[index] = transferBytePattern(byteSet,0,8);
+                std::uint8_t& value = infoSet[index];
+                value = transferBytePattern(byteSet);
             }
+            std::cout<<"("<<startByte<<","<<startByte+numberBytesPerItem<<") ";
+            for(std::uint64_t index = startByte; index<startByte+numberBytesPerItem; index++)
+            {
+                std::uint8_t& value = infoSet[index];
+                std::cout<<index<<":"<<unsigned(value)<<"|";
+            }
+            std::cout<<std::endl;
         };
         
         /* Set the bit on variable with leftShift counted as 
@@ -313,6 +351,9 @@ class InformationSet
         };
         */
         
+        /* Transfer last bits of value to variable in reversed order
+         * value[ <<size : <<0 ] -> variable[startIndex+size : startIndex]
+         */
         template<typename T>
         void assignBitPattern
         (
@@ -322,12 +363,17 @@ class InformationSet
             unsigned int size
         ) const
         {
-            for(unsigned int i=0; i<size; i++)
+            if(size>30)
+                throw std::invalid_argument("Size must be limited to <= 30");
+            for(unsigned int i=0; i<size && i+startIndex<variable.size() ; i++)
             {
                 variable[i+startIndex] = getBit(value,size-1-i);
             }
         };
         
+        /* Transfer bits of variable to result reversed order
+         * variable[startIndex+size : startIndex] -> result[ <<size : <<0 ]
+         */
         template<typename T>
         T transferBitPattern
         (
@@ -336,8 +382,10 @@ class InformationSet
             unsigned int size
         ) const
         {
+            if(size>30)
+                throw std::invalid_argument("Size must be limited to <= 30");
             T result = 0;
-            for(unsigned int i=0; i<size; i++)
+            for(unsigned int i=0; i<size && i+startIndex<variable.size() ; i++)
             {
                 if(variable[i+startIndex])
                 {
@@ -351,6 +399,9 @@ class InformationSet
             return result;
         };
         
+        /* Transfer bits of variable to result reversed order
+         * variable[startIndex+size : startIndex] -> result[ <<size : <<0 ]
+         */
         std::uint8_t transferBytePattern
         (
             const std::bitset<8>& variable,
@@ -358,8 +409,10 @@ class InformationSet
             unsigned int size
         ) const
         {
+            if(size>30)
+                throw std::invalid_argument("Size must be limited to <= 30");
             std::uint8_t result = 0;
-            for(unsigned int i=0; i<size; i++)
+            for(unsigned int i=0; i<size && i+startIndex<variable.size() ; i++)
             {
                 if(variable[i+startIndex])
                 {
@@ -371,6 +424,17 @@ class InformationSet
                 }
             }
             return result;
+        };
+        
+        /* Transfer bits of variable to result reversed order
+         * variable[7 : 0] -> result[ <<7 : <<0 ]
+         */
+        std::uint8_t transferBytePattern
+        (
+            const std::bitset<8>& variable
+        ) const
+        {
+            return transferBytePattern(variable,0,8);
         };
         
         friend class IS_Iterator;
@@ -500,6 +564,9 @@ class InformationSet
         FRIEND_TEST(informationset_test, unsetBit_test);
         FRIEND_TEST(informationset_test, getBit_test);
         FRIEND_TEST(informationset_test, assignBitPattern_test);
+        FRIEND_TEST(informationset_test, transferBitPattern_test);
+        FRIEND_TEST(informationset_test, transferBytePattern_test);
+        FRIEND_TEST(informationset_test, readWriteBits_test);
 
         FRIEND_TEST(informationset_test, readWriteIteratorComp_test);
         FRIEND_TEST(informationset_test, readWriteIndexComp_test);
