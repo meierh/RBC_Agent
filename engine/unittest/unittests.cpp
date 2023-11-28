@@ -7,6 +7,7 @@ TEST(sample_test_case, sample_test)
 #include <iostream>
 #include <random>
 #include <bitset>
+#include <unordered_set>
 #include "informationset.h"
 
 namespace crazyara {
@@ -25,6 +26,19 @@ typename std::bitset<size> random_bitset( double p = 0.5)
 
     return bits;
 }
+
+template<size_t size>
+std::bitset<size> gen_random_bitset(double p=0.5)
+{
+    return random_bitset<size>(p);
+}
+
+template<size_t size>
+struct BitsetGenerator {
+    double p;
+    BitsetGenerator (double p) : p(p) {}
+    std::bitset<size> operator() () { return gen_random_bitset<size>(p); }
+};
 
 constexpr uint bitSize = 27;
 
@@ -128,11 +142,11 @@ TEST(informationset_test, assignBitPattern_test)
 
 TEST(informationset_test, transferBitPattern_test)
 {
-    InformationSet<bitSize> ifs;   
-    std::bitset<bitSize> bits({0x5FEAC8F});
+    InformationSet<27> ifs;   
+    std::bitset<27> bits({0x5FEAC8F});
     EXPECT_EQ(ifs.transferBitPattern<std::uint64_t>(bits,0,4),0xF);
     EXPECT_EQ(ifs.transferBitPattern<std::uint64_t>(bits,4,4),0x1);    
-    EXPECT_EQ(ifs.transferBitPattern<std::uint64_t>(bits,24,12),0xA00);
+    EXPECT_EQ(ifs.transferBitPattern<std::uint64_t>(bits,24,12),0x5);
 }
 
 TEST(informationset_test, transferBytePattern_test)
@@ -158,24 +172,18 @@ TEST(informationset_test, writeSingleOnNonParam_test)
 
 TEST(informationset_test, readWriteBits_test)
 {   
-    crazyara::InformationSet<bitSize> ifs;
-    std::vector<std::bitset<bitSize>> bitsets(10,std::bitset<bitSize>(0));
+    crazyara::InformationSet<bitSize> ifs;   
+    std::vector<std::bitset<bitSize>> bitsets(128,random_bitset<bitSize>(0.5));
     ifs.add(bitsets);
-    EXPECT_EQ(ifs.size(), 10);
-    EXPECT_EQ(*(ifs.getBitPattern(2)),std::bitset<bitSize>(0x0));
-    
-    /*
-    std::bitset<bitSize> bits({0x5FEAC8F});
-    ifs.setBitPattern(2,bits);
-    EXPECT_EQ(*(ifs.getBitPattern(2)),bits);
-    */
+    EXPECT_EQ(ifs.size(), 128);
+    for(uint i=0; i<bitsets.size(); i++)
+        EXPECT_EQ(*(ifs.getBitPattern(i)),bitsets[i]);
 }
 
-/*
 TEST(informationset_test, readWriteIteratorComp_test)
 {   
     crazyara::InformationSet<bitSize> ifs;
-    std::vector<std::bitset<bitSize>> bitsets(2,random_bitset<bitSize>(0.5));
+    std::vector<std::bitset<bitSize>> bitsets(64,random_bitset<bitSize>(0.5));
     ifs.add(bitsets);
     auto iter = ifs.cbegin();
     for(int i=0; i<bitsets.size(); i++,iter++)
@@ -190,7 +198,6 @@ TEST(informationset_test, readWriteIndexComp_test)
 {   
     crazyara::InformationSet<bitSize> ifs;
     std::vector<std::bitset<bitSize>> bitsets(1,random_bitset<bitSize>(0.5));
-    std::cout<<"Bits:"<<bitsets[0]<<std::endl;
     ifs.add(bitsets);
     EXPECT_EQ(ifs.size(),bitsets.size());
     
@@ -198,6 +205,131 @@ TEST(informationset_test, readWriteIndexComp_test)
     {
         std::unique_ptr<std::bitset<bitSize>> data = ifs.getBitPattern(i);
         EXPECT_EQ(*data,bitsets[i]);
+    }
+}
+
+TEST(informationset_test, readWriteIterDeleteCompSameSize_test)
+{   
+    crazyara::InformationSet<bitSize> ifs;
+    std::vector<std::bitset<bitSize>> bitsets(64);
+    std::generate(bitsets.begin(),bitsets.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.add(bitsets);
+    std::vector<std::uint64_t> prime = {2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61};
+    std::vector<std::bitset<bitSize>> replace(prime.size());
+    std::generate(replace.begin(),replace.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.remove(prime);
+    ifs.add(replace);
+    for(uint i=0; i<prime.size(); i++)
+        bitsets[prime[i]] = replace[i];
+
+    auto iter = ifs.cbegin();
+    for(int i=0; i<bitsets.size(); i++,iter++)
+    {
+        std::unique_ptr<std::bitset<bitSize>> data = *iter;
+        EXPECT_EQ(*data,bitsets[i]);
+    }
+}
+
+TEST(informationset_test, readWriteIndexDeleteCompSameSize_test)
+{   
+    crazyara::InformationSet<bitSize> ifs;
+    std::vector<std::bitset<bitSize>> bitsets(64);
+    std::generate(bitsets.begin(),bitsets.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.add(bitsets);
+    std::vector<std::uint64_t> prime = {2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61};
+    std::vector<std::bitset<bitSize>> replace(prime.size());
+    std::generate(replace.begin(),replace.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.remove(prime);
+    ifs.add(replace);
+    for(uint i=0; i<prime.size(); i++)
+        bitsets[prime[i]] = replace[i];
+        
+    auto iter = ifs.cbegin();
+    for(int i=0; i<bitsets.size(); i++,iter++)
+    {
+        std::unique_ptr<std::bitset<bitSize>> data = ifs.getBitPattern(i);
+        EXPECT_EQ(*data,bitsets[i]);
+        iter++;
+    }
+}
+
+TEST(informationset_test, readWriteIterDeleteCompIncreaseSize_test)
+{   
+    crazyara::InformationSet<bitSize> ifs;
+    std::vector<std::bitset<bitSize>> bitsets(4);
+    std::generate(bitsets.begin(),bitsets.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.add(bitsets);
+    std::vector<std::uint64_t> prime = {2};//,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61};
+    std::vector<std::bitset<bitSize>> replace(prime.size()*2);
+    std::generate(replace.begin(),replace.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.remove(prime);
+    ifs.add(replace);
+    for(uint i=0; i<prime.size(); i++)
+        bitsets[prime[i]] = replace[i];
+    for(uint i=prime.size(); i<prime.size()*2; i++)
+        bitsets.push_back(replace[i]);
+
+    std::unordered_set<std::bitset<bitSize>> set(bitsets.begin(),bitsets.end());
+    auto iter = ifs.cbegin();
+    for(int i=0; i<bitsets.size(); i++,iter++)
+    {
+        std::unique_ptr<std::bitset<bitSize>> data = *iter;
+        auto iterSet = set.find(*data);
+        std::cout<<"i:"<<i<<" "<<bitsets[i]<<std::endl<<"    "<<*data<<std::endl<<std::endl;
+        
+        EXPECT_EQ(iterSet==set.end(),false);
+    }
+}
+
+/*
+TEST(informationset_test, readWriteIndexDeleteCompIncreaseSize_test)
+{   
+    crazyara::InformationSet<bitSize> ifs;
+    std::vector<std::bitset<bitSize>> bitsets(64);
+    std::generate(bitsets.begin(),bitsets.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.add(bitsets);
+    std::vector<std::uint64_t> prime = {2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61};
+    std::vector<std::bitset<bitSize>> replace(prime.size()*2);
+    std::generate(replace.begin(),replace.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.remove(prime);
+    ifs.add(replace);
+    for(uint i=0; i<prime.size(); i++)
+        bitsets[prime[i]] = replace[i];
+    for(uint i=prime.size(); i<prime.size()*2; i++)
+        bitsets.push_back(replace[i]);
+    
+    std::unordered_set<std::bitset<bitSize>> set(bitsets.begin(),bitsets.end());
+    for(int i=0; i<bitsets.size(); i++)
+    {
+        std::unique_ptr<std::bitset<bitSize>> data = ifs.getBitPattern(i);
+        auto iter = set.find(*data);
+        EXPECT_EQ(iter==set.end(),false);
+    }
+}
+*/
+/*
+TEST(informationset_test, readWriteIterDeleteCompShrink_test)
+{   
+    crazyara::InformationSet<bitSize> ifs;
+    std::vector<std::bitset<bitSize>> bitsets(64);
+    std::generate(bitsets.begin(),bitsets.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.add(bitsets);
+    std::vector<std::uint64_t> prime = {2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61};
+    std::vector<std::bitset<bitSize>> replace(prime.size());
+    std::generate(replace.begin(),replace.end(),BitsetGenerator<bitSize>(0.5));
+    ifs.remove(prime);
+    ifs.add(replace);
+    for(uint i=0; i<prime.size(); i++)
+        bitsets[prime[i]] = replace[i];
+    
+    std::unordered_set<std::bitset<bitSize>> allPatterns(bitsets.begin(),bitsets.end());
+    
+    auto iter = ifs.cbegin();
+    for(int i=0; i<bitsets.size(); i++,iter++)
+    {
+        std::unique_ptr<std::bitset<bitSize>> data = ifs.getBitPattern(i);
+        EXPECT_EQ(*data,bitsets[i]);
+        iter++;
     }
 }
 */
