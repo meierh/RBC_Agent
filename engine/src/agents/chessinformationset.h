@@ -64,6 +64,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 {
                     return column==other.column && row==other.row;
                 }
+                bool operator!=(const Square& other) const {return !operator==(other);}
                 typedef struct{
                     auto operator()(const Square &s) const -> size_t {
                         return std::hash<ChessColumn>{}(s.column)^std::hash<ChessRow>{}(s.row);
@@ -81,6 +82,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 bool diagVertMinusHorizMinus(std::uint8_t multiple);
                 
                 // special knight moves
+                /*
                 bool knightVertPlusHorizPlus();
                 bool knightVertPlusHorizMinus();
                 
@@ -92,6 +94,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 
                 bool knightHorizMinusVertPlus();
                 bool knightHorizMinusVertMinus();
+                */
                 
                 bool validSquare(std::int8_t column, std::int8_t row);
                 
@@ -112,14 +115,14 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             sq.column = static_cast<ChessInformationSet::ChessColumn>(x);
             sq.row = static_cast<ChessInformationSet::ChessRow>(y);
             return sq;
-        }
+        };
         
         static std::uint8_t squareToBoardIndex(Square sq)
         {
             std::uint8_t x = static_cast<std::uint8_t>(sq.column); //column {A-H}
             std::uint8_t y = static_cast<std::uint8_t>(sq.row); //row {1-8}
             return x*8+y;
-        }
+        };
         
         class OnePlayerChessInfo
         {
@@ -157,6 +160,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             private:
                 std::unordered_map<Square,PieceType,Square::Hasher> squareToPieceMap;
                 std::unordered_map<Square,std::vector<ChessInformationSet::Square>::iterator,Square::Hasher> squareToPieceIter;
+                
+                FRIEND_TEST(chessinformationsetoneplayerinfo_test, lambdafunctions_test);
         };
         
         class BoardClause
@@ -174,6 +179,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 {
                     boardPlaces.push_back(boardPlace);
                     boardPlaceTypes.push_back(boardPlaceType);
+                    conditionBool.push_back(true);
                     literalNbr = 1;
                 };
 
@@ -234,6 +240,11 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     }
                     return oneTrue;
                 };
+                
+                FRIEND_TEST(chessinformationsetboardclause_test, constructor_test);
+                FRIEND_TEST(chessinformationsetboardclause_test, orOperator_test);
+                FRIEND_TEST(chessinformationsetboardclause_test, notOperator_test);
+                FRIEND_TEST(chessinformationsetboardclause_test, evalOperator_test);
         };
         
         /**
@@ -327,7 +338,11 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         };
         
     private:
-        std::queue<std::uint64_t> incompatibleBoards;        
+        std::queue<std::uint64_t> incompatibleBoards;
+        
+        FRIEND_TEST(chessinformationsetsquare_test, constructorAndEqual_test);
+        FRIEND_TEST(chessinformationsetsquare_test, generalmovement_test);
+        FRIEND_TEST(chessinformationsetsquare_test, validSquare_test);
 };
 }
 #endif // INFORMATIONSET_H

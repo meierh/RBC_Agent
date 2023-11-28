@@ -543,9 +543,11 @@ endif()
 
 ### Unit Tests Helge Meier RBC ###
 # Locate GTest
+file(GLOB tested_cpp "src/agents/chessinformationset.cpp")
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
-file(GLOB source_files "unittest/unittests.cpp")
-add_executable(unittests ${source_files})
+file(GLOB test_files "unittest/unittests.cpp")
+list(APPEND test_files ${tested_cpp})
+add_executable(unittests ${test_files})
 target_link_libraries(unittests ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES})
 gtest_discover_tests(unittests)

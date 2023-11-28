@@ -87,10 +87,40 @@ class InformationSet
                 infoSetCapacity*=2;
                 expandInfoSet=true;
             }
-            std::cout<<"Expand:"<<expandInfoSet<<"  infoSetCapacity:"<<infoSetCapacity<<"  infoSetSize:"<<infoSetSize<<"  necessaryNewSize:"<<necessaryNewSize<<std::endl;
+            //std::cout<<"Expand:"<<expandInfoSet<<"  infoSetCapacity:"<<infoSetCapacity<<"  infoSetSize:"<<infoSetSize<<"  necessaryNewSize:"<<necessaryNewSize<<std::endl;
             if(expandInfoSet)
             {
+                /*
+                for(std::uint64_t index=0; index<infoSetSize; index++)
+                {
+                    std::uint64_t startByte = index*numberBytesPerItem;
+                    std::uint64_t endByte = startByte+numberBytesPerItem;
+                    std::cout<<"["<<startByte<<","<<endByte<<"] ";
+                    for(std::uint64_t byteInd=startByte; byteInd<endByte; byteInd++)
+                    {
+                        std::cout<<unsigned(infoSet[byteInd])<<" ";
+                    }
+                    std::cout<<" -- "<<getBitPattern(index)->to_ulong();
+                    std::cout<<std::endl;
+                }
+                */
                 std::unique_ptr<std::uint8_t[]> prevInfoSet = std::move(infoSet);
+                /*
+                std::uint64_t prevInfoSetIndex=0;
+                for(std::uint64_t index=0; index<infoSetSize; index++)
+                {
+                    std::uint64_t startByte = index*numberBytesPerItem;
+                    std::uint64_t endByte = startByte+numberBytesPerItem;
+                    std::cout<<"Given "<<index<<": ";
+                    for(std::uint64_t byteInd=startByte; byteInd<endByte; byteInd++)
+                    {
+                        std::cout<<unsigned(prevInfoSet[byteInd])<<" ";
+                    }
+                    std::cout<<std::endl;
+                    prevInfoSetIndex++;
+                }
+                */
+    
                 infoSet = std::make_unique<std::uint8_t[]>(numberBytesPerItem*infoSetCapacity);
                 //std::cout<<"Reallocated: "<<numberBytesPerItem*infoSetCapacity<<std::endl;
 
@@ -99,10 +129,17 @@ class InformationSet
                 {
                     if(removedBoards.find(index)==removedBoards.end())
                     {
+                        std::uint64_t startBytePrevInfoSet = index*numberBytesPerItem;
+                        //std::uint64_t endBytePrevInfoSet = startBytePrevInfoSet+numberBytesPerItem;
+                        std::uint64_t startByteInfoSet = newInfoSetIndex*numberBytesPerItem;
+                        //std::uint64_t endByteInfoSet = startByteInfoSet+numberBytesPerItem;
+                        //std::cout<<"Copy "<<index<<": ";
                         for(std::uint64_t byteInd=0; byteInd<numberBytesPerItem; byteInd++)
                         {
-                            infoSet[newInfoSetIndex+byteInd] = prevInfoSet[index+byteInd];
+                            infoSet[startByteInfoSet+byteInd] = prevInfoSet[startBytePrevInfoSet+byteInd];
+                            //std::cout<<unsigned(prevInfoSet[index+byteInd])<<" ";
                         }
+                        //std::cout<<std::endl;
                         newInfoSetIndex++;
                     }
                 }
@@ -111,6 +148,7 @@ class InformationSet
                 for(std::uint64_t index=0; index<items.size(); index++,newInfoSetIndex++)
                 {
                     setBitPattern(newInfoSetIndex,items[index]);
+                    //std::cout<<"Insert:"<<items[index].to_ulong()<<std::endl;
                 }
             }
             else
@@ -163,16 +201,18 @@ class InformationSet
 
             if(reducedInfoSet)
             {
-                std::unique_ptr<std::uint8_t[]> prevInfoSet = infoSet;
+                std::unique_ptr<std::uint8_t[]> prevInfoSet = std::move(infoSet);
                 infoSet = std::make_unique<std::uint8_t[]>(numberBytesPerItem*infoSetCapacity);
                 std::uint64_t newInfoSetIndex=0;
                 for(std::uint64_t index=0; index<infoSetSize; index++)
                 {
                     if(removedBoards.find(index)==removedBoards.end())
                     {
+                        std::uint64_t startBytePrevInfoSet = index*numberBytesPerItem;
+                        std::uint64_t startByteInfoSet = newInfoSetIndex*numberBytesPerItem;
                         for(std::uint64_t byteInd=0; byteInd<numberBytesPerItem; byteInd++)
                         {
-                            infoSet[newInfoSetIndex+byteInd] = prevInfoSet[index+byteInd];
+                            infoSet[startByteInfoSet+byteInd] = prevInfoSet[startBytePrevInfoSet+byteInd];
                         }
                         newInfoSetIndex++;
                     }
@@ -188,9 +228,13 @@ class InformationSet
                 {
                     if(removedBoards.find(index)==removedBoards.end())
                     {
+                        std::uint64_t startBytePrevInfoSet = index*numberBytesPerItem;
+                        //std::uint64_t endBytePrevInfoSet = startBytePrevInfoSet+numberBytesPerItem;
+                        std::uint64_t startByteInfoSet = newInfoSetIndex*numberBytesPerItem;
+                        //std::uint64_t endByteInfoSet = startByteInfoSet+numberBytesPerItem;
                         for(std::uint64_t byteInd=0; byteInd<numberBytesPerItem; byteInd++)
                         {
-                            infoSet[newInfoSetIndex+byteInd] = infoSet[index+byteInd];
+                            infoSet[startByteInfoSet+byteInd] = infoSet[startBytePrevInfoSet+byteInd];
                         }
                         newInfoSetIndex++;
                     }
@@ -216,6 +260,7 @@ class InformationSet
                 (*bytes)[ind] = infoSet[index];
                 ind++;
             }
+            //std::cout<<"Read ["<<startByte<<","<<startByte+numberBitsPerItem<<"]"<<std::endl;
             return bytes;    
         };
         
@@ -401,33 +446,28 @@ class InformationSet
             unsigned int size
         ) const
         {
-            std::cout<<"variable:"<<variable<<std::endl;
+            //std::cout<<"variable:"<<variable<<std::endl;
             if(size>30)
                 throw std::invalid_argument("Size must be limited to <= 30");
             
-            std::cout<<"variable.size():"<<variable.size()<<std::endl;
-            std::cout<<"startIndex:"<<startIndex<<std::endl;
             unsigned int insertLen = variable.size()-startIndex;
-            std::cout<<"insertLen:"<<insertLen<<std::endl;
-            std::cout<<"size:"<<size<<std::endl;
             size = std::min<unsigned int>(size,insertLen);
-            std::cout<<"size:"<<size<<std::endl;
-            
+
             T result = 0;
             for(unsigned int i=0; i<size /*&& i+startIndex<variable.size()*/ ; i++)
             {
                 if(variable[i+startIndex])
                 {
-                    std::cout<<"Set: <<"<<size-1-i<<std::endl;
+                    //std::cout<<"Set: <<"<<size-1-i<<std::endl;
                     setBit(result,size-1-i);
                 }
                 else
                 {
-                    std::cout<<"Unset: <<"<<size-1-i<<std::endl;
+                    //std::cout<<"Unset: <<"<<size-1-i<<std::endl;
                     unsetBit(result,size-1-i);
                 }
             }
-            std::cout<<"result:"<<result<<std::endl;
+            //std::cout<<"result:"<<result<<std::endl;
             return result;
         };
         
@@ -584,6 +624,11 @@ class InformationSet
             return ++iter;
         };
         
+        void remove(const IS_Iterator& iterator)
+        {
+            remove(iterator.getCurrentIndex());
+        };
+        
     private:
         std::unique_ptr<std::uint8_t[]> infoSet;
         std::uint64_t infoSetSize; //Last index in infoSet with a valid item
@@ -605,6 +650,9 @@ class InformationSet
         FRIEND_TEST(informationset_test, readWriteIndexDeleteCompSameSize_test);
         FRIEND_TEST(informationset_test, readWriteIterDeleteCompIncreaseSize_test);
         FRIEND_TEST(informationset_test, readWriteIndexDeleteCompIncreaseSize_test);
+        FRIEND_TEST(informationset_test, readWriteIndexDeleteCompDecreaseSize_test);
+        FRIEND_TEST(informationset_test, deleteWithRemoveNoReset_test);
+        FRIEND_TEST(informationset_test, deleteWithRemoveReset_test);
 };
 }
 

@@ -107,7 +107,7 @@ std::function<bool(const ChessInformationSet::Square&)> ChessInformationSet::One
     squareToPieceMap.clear();
     for(const ChessInformationSet::Square& sq : onePieceType)
     {
-        squareToPieceMap[sq] = pT;
+        squareToPieceMap[sq] = pT; //Insert random piece
     }
 
     return [&](const Square& sq){return this->squareToPieceMap.find(sq)!=this->squareToPieceMap.end();};
@@ -400,6 +400,7 @@ bool ChessInformationSet::Square::diagVertMinusHorizPlus(std::uint8_t multiple){
 bool ChessInformationSet::Square::diagVertPlusHorizMinus(std::uint8_t multiple){return moveSquare(-multiple,multiple);}
 bool ChessInformationSet::Square::diagVertMinusHorizMinus(std::uint8_t multiple){return moveSquare(-multiple,-multiple);}
 
+/*
 bool ChessInformationSet::Square::knightVertPlusHorizPlus(){return moveSquare(1,2);}
 bool ChessInformationSet::Square::knightVertPlusHorizMinus(){return moveSquare(-1,2);}
 bool ChessInformationSet::Square::knightVertMinusHorizPlus(){return moveSquare(1,-2);}
@@ -408,6 +409,7 @@ bool ChessInformationSet::Square::knightHorizPlusVertPlus(){return moveSquare(2,
 bool ChessInformationSet::Square::knightHorizPlusVertMinus(){return moveSquare(2,-1);}
 bool ChessInformationSet::Square::knightHorizMinusVertPlus(){return moveSquare(-2,1);}
 bool ChessInformationSet::Square::knightHorizMinusVertMinus(){return moveSquare(-2,-1);}
+*/
 
 bool ChessInformationSet::Square::validSquare(std::int8_t column, std::int8_t row)
 {
