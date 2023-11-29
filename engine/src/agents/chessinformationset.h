@@ -26,6 +26,8 @@
 #ifndef CHESSINFORMATIONSET_H
 #define CHESSINFORMATIONSET_H
 
+#include <gtest/gtest.h>
+#include <iostream>
 #include <cassert>
 #include <memory>
 #include <cstdint>
@@ -97,6 +99,13 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 */
                 
                 bool validSquare(std::int8_t column, std::int8_t row);
+
+                std::string to_string() const
+                {
+                    char col = 'a' + static_cast<uint>(column);
+                    char row = '1' + static_cast<uint>(row);
+                    return std::string() + col + row;
+                };
                 
             private:
                 bool moveSquare(std::int8_t deltaCol, std::int8_t deltaRow);                
@@ -136,14 +145,14 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 std::vector<ChessInformationSet::Square> kings;
                 
                 // castling legal
-                bool kingside;
-                bool queenside;
+                bool kingside=true;
+                bool queenside=true;
                 
                 // en-passent legal
                 std::vector<ChessInformationSet::Square> en_passant;
                 
                 // fifty move rule counter
-                std::uint8_t no_progress_count;
+                std::uint8_t no_progress_count=0;
 
                 std::function<bool(const ChessInformationSet::Square&)> getBlockCheck();
                 std::function<bool(const ChessInformationSet::Square&)> getBlockCheck
@@ -156,6 +165,69 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 (
                     std::vector<ChessInformationSet::Square>& onePieceType
                 );
+                
+                bool operator==(const OnePlayerChessInfo& other) const
+                {
+                    using CIS = ChessInformationSet;
+                    bool equal=true;
+                    auto compareVectors = []
+                    (
+                        const std::vector<CIS::Square>& a,
+                        const std::vector<CIS::Square>& b
+                    )
+                    {
+                        std::unordered_set<CIS::Square,CIS::Square::Hasher> a_set(a.begin(),a.end());
+                        for(const CIS::Square& sq : b)
+                        {
+                            auto iter = a_set.find(sq);
+                            if(iter!=a_set.end())
+                                a_set.erase(iter);
+                            else
+                                return false;
+                        }
+                        return a_set.empty();
+                    };
+                    equal &= compareVectors(pawns,other.pawns);
+                    equal &= compareVectors(knights,other.knights);
+                    equal &= compareVectors(bishops,other.bishops);
+                    equal &= compareVectors(rooks,other.rooks);
+                    equal &= compareVectors(queens,other.queens);
+                    equal &= compareVectors(kings,other.kings);
+                    equal &= kingside==other.kingside;
+                    equal &= queenside==other.queenside;
+                    equal &= compareVectors(en_passant,other.en_passant);
+                    equal &= no_progress_count==other.no_progress_count;
+                    return equal;
+                };
+                
+                std::string to_string() const
+                {
+                    auto printPieces = [](const std::vector<ChessInformationSet::Square>& list,std::string name)
+                    {
+                        std::string res = name+"( ";
+                        for(ChessInformationSet::Square sq : list)
+                            res+=sq.to_string()+" ";
+                        res+=") ";
+                        return res;
+                    };
+                    std::string res;
+                    res += printPieces(pawns,"p");
+                    res += printPieces(knights,"n");
+                    res += printPieces(bishops,"b");
+                    res += printPieces(rooks,"r");
+                    res += printPieces(queens,"q");
+                    res += printPieces(kings,"k");
+                    res += "Ck:"+std::to_string(kingside);
+                    res += " Cq:"+std::to_string(queenside)+" ";
+                    res += printPieces(en_passant,"enPass");
+                    res += std::to_string(no_progress_count);
+                    return res;
+                };
+                friend std::ostream& operator<<(std::ostream&os, const OnePlayerChessInfo& opci)
+                {
+                    os<<opci.to_string();
+                    return os;
+                }
                 
             private:
                 std::unordered_map<Square,PieceType,Square::Hasher> squareToPieceMap;
@@ -236,6 +308,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                             else
                                 thisClauseBool = false;
                         }
+                        if(!boolVal)
+                            thisClauseBool = !thisClauseBool;
                         oneTrue = oneTrue || thisClauseBool;
                     }
                     return oneTrue;
@@ -343,6 +417,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         FRIEND_TEST(chessinformationsetsquare_test, constructorAndEqual_test);
         FRIEND_TEST(chessinformationsetsquare_test, generalmovement_test);
         FRIEND_TEST(chessinformationsetsquare_test, validSquare_test);
+        FRIEND_TEST(chessinformationset_test, encodeDecode_test);
+        FRIEND_TEST(chessinformationset_test, addSetAndGetBoards_test);
 };
 }
 #endif // INFORMATIONSET_H

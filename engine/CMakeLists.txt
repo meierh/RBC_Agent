@@ -543,7 +543,7 @@ endif()
 
 ### Unit Tests Helge Meier RBC ###
 # Locate GTest
-file(GLOB tested_cpp "src/agents/chessinformationset.cpp")
+file(GLOB tested_cpp "src/agents/chessinformationset.cpp" "src/agents/rbcagent.cpp")
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 file(GLOB test_files "unittest/unittests.cpp")

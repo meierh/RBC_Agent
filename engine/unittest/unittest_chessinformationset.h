@@ -342,23 +342,140 @@ TEST(chessinformationsetboardclause_test, evalOperator_test)
     
     CIS::BoardClause bc1 (sq1,PT::pawn);
     CIS::BoardClause bc2=!CIS::BoardClause(sq2,PT::none);
-    EXPECT_EQ(bc2.literalNbr,1);
-    EXPECT_EQ(bc2.boardPlaces.size(),1);
-    EXPECT_EQ(bc2.boardPlaces[0],sq2);
-    EXPECT_EQ(bc2.boardPlaceTypes.size(),1);
-    EXPECT_EQ(bc2.boardPlaceTypes[0],PT::none);
-    EXPECT_EQ(bc2.conditionBool.size(),1);
-    EXPECT_EQ(bc2.conditionBool[0],false);
     CIS::BoardClause bc3 (sq6,PT::bishop);
     CIS::BoardClause bc4 (sq10,PT::queen);
     CIS::BoardClause bc5 (sq12,PT::none);
-    CIS::BoardClause bcFull = bc1 | bc2 | bc3 | bc4 | bc5;    
+    CIS::BoardClause bcFull1 = bc1 | bc2 | bc3 | bc4 | bc5;    
     EXPECT_EQ(bc1(opci),true);
     EXPECT_EQ(bc2(opci),true);
     EXPECT_EQ(bc3(opci),true);
     EXPECT_EQ(bc4(opci),true);
     EXPECT_EQ(bc5(opci),true);
-    EXPECT_EQ(bcFull(opci),true); 
+    EXPECT_EQ(bcFull1(opci),true);
+    
+    CIS::BoardClause bc6 (sq1,PT::pawn);
+    CIS::BoardClause bc7 (sq2,PT::none);
+    CIS::BoardClause bc8 (sq6,PT::bishop);
+    CIS::BoardClause bc9 (sq10,PT::none);
+    CIS::BoardClause bc10 (sq12,PT::none);
+    CIS::BoardClause bcFull2 = bc6 | bc7 | bc8 | bc9 | bc10;    
+    EXPECT_EQ(bc6(opci),true);
+    EXPECT_EQ(bc7(opci),false);
+    EXPECT_EQ(bc8(opci),true);
+    EXPECT_EQ(bc9(opci),false);
+    EXPECT_EQ(bc10(opci),true);
+    EXPECT_EQ(bcFull2(opci),true);
+    
+    CIS::BoardClause bcFull3 = !bc6 | bc7 | !bc8 | bc9 | !bc10;
+    EXPECT_EQ(bcFull3(opci),false);
+}
+
+TEST(chessinformationset_test, encodeDecode_test)
+{
+    using CIS = ChessInformationSet;
+    CIS cis;
+    using PT = CIS::BoardClause::PieceType;
+    CIS::Square sq1(CIS::ChessColumn::B,CIS::ChessRow::three);
+    CIS::Square sq2(CIS::ChessColumn::A,CIS::ChessRow::seven);
+    CIS::Square sq3(CIS::ChessColumn::E,CIS::ChessRow::one);
+    CIS::Square sq4(CIS::ChessColumn::B,CIS::ChessRow::two);
+    CIS::Square sq5(CIS::ChessColumn::C,CIS::ChessRow::five);
+    CIS::Square sq6(CIS::ChessColumn::F,CIS::ChessRow::four);
+    CIS::Square sq7(CIS::ChessColumn::E,CIS::ChessRow::eight);
+    CIS::Square sq8(CIS::ChessColumn::D,CIS::ChessRow::seven);
+    CIS::Square sq9(CIS::ChessColumn::D,CIS::ChessRow::one);
+    CIS::Square sq10(CIS::ChessColumn::E,CIS::ChessRow::five);
+    CIS::Square sq11(CIS::ChessColumn::C,CIS::ChessRow::seven);
+        
+    CIS::OnePlayerChessInfo opci;
+    opci.pawns = {{sq1,sq2,sq3}};
+    opci.knights = {{sq4,sq5}};
+    opci.bishops = {{sq6,sq7}};
+    opci.rooks = {{sq8,sq9}};
+    opci.queens = {{sq10}};
+    opci.kings =  {{sq11}};
+    opci.kingside=true;
+    opci.queenside=false;
+    opci.en_passant = {{sq2}};
+    opci.no_progress_count = 7;
+        
+    auto encoded = cis.encodeBoard(opci,1);
+    auto decoded = cis.decodeBoard(*encoded);
+    CIS::OnePlayerChessInfo opci2 = decoded->first;
+    EXPECT_EQ(opci,opci2);
+    
+    opci = CIS::OnePlayerChessInfo();        
+    encoded = cis.encodeBoard(opci,1);
+    decoded = cis.decodeBoard(*encoded);
+    opci2 = decoded->first;
+    EXPECT_EQ(opci,opci2);
+
+    opci = CIS::OnePlayerChessInfo();
+    opci.no_progress_count = 200;   
+    EXPECT_ANY_THROW(cis.encodeBoard(opci,1));
+    
+    opci.no_progress_count = 50;   
+    EXPECT_ANY_THROW(cis.encodeBoard(opci,1.1));
+}
+
+TEST(chessinformationset_test, addSetAndGetBoards_test)
+{
+    using CIS = ChessInformationSet;
+    CIS cis;
+    using PT = CIS::BoardClause::PieceType;
+    CIS::Square sq1(CIS::ChessColumn::B,CIS::ChessRow::three);
+    CIS::Square sq2(CIS::ChessColumn::A,CIS::ChessRow::seven);
+    CIS::Square sq3(CIS::ChessColumn::E,CIS::ChessRow::one);
+    CIS::Square sq4(CIS::ChessColumn::B,CIS::ChessRow::two);
+    CIS::Square sq5(CIS::ChessColumn::C,CIS::ChessRow::five);
+    CIS::Square sq6(CIS::ChessColumn::F,CIS::ChessRow::four);
+    CIS::Square sq7(CIS::ChessColumn::E,CIS::ChessRow::eight);
+    CIS::Square sq8(CIS::ChessColumn::D,CIS::ChessRow::seven);
+    CIS::Square sq9(CIS::ChessColumn::D,CIS::ChessRow::one);
+    CIS::Square sq10(CIS::ChessColumn::E,CIS::ChessRow::five);
+    CIS::Square sq11(CIS::ChessColumn::C,CIS::ChessRow::seven);
+        
+    CIS::OnePlayerChessInfo opci1;
+    opci1.pawns = {{sq1,sq2,sq3}};
+    opci1.knights = {{sq4,sq5}};
+    opci1.bishops = {{sq6,sq7}};
+    opci1.rooks = {{sq8,sq9}};
+    opci1.queens = {{sq10}};
+    opci1.kings =  {{sq11}};
+    opci1.kingside=true;
+    opci1.queenside=false;
+    opci1.en_passant = {{sq2}};
+    opci1.no_progress_count = 7;
+    
+    CIS::OnePlayerChessInfo opci2;
+
+    CIS::OnePlayerChessInfo opci3;
+    opci3.no_progress_count = 50;
+    opci3.kingside = true;
+    opci3.queenside = false;
+    
+    CIS::OnePlayerChessInfo opci4;
+    opci4.pawns = {{sq1,sq2,sq3}};
+    opci4.bishops = {{sq6,sq7}};
+    opci4.rooks = {{sq8,sq9}};
+    opci4.kings =  {{sq11}};
+    opci4.kingside=true;
+    opci4.queenside=false;
+    opci4.en_passant = {{sq2}};
+    opci4.no_progress_count = 0;
+    
+    std::vector<std::pair<CIS::OnePlayerChessInfo,double>> boards = {{opci1,0.1},{opci2,0.3},{opci3,0.5},{opci4,0.7}};
+    cis.add(boards);
+    
+    auto iter=cis.begin();
+    for(int i=0;i<boards.size();i++,iter++)
+    {
+        EXPECT_EQ(boards[i].first,(*iter)->first);
+    }
+    cis.setBoard(opci2,0.6,3);
+    EXPECT_EQ(opci2,cis.getBoard(3)->first);
+    
+    EXPECT_ANY_THROW(cis.setBoard(opci2,0.6,10));
 }
 
 TEST(chessinformationset_test, constructor_test)

@@ -312,12 +312,16 @@ std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard
     bitStartInd += 64;
     
     std::uint8_t no_progress_count = piecesInfo.no_progress_count;
+    if(no_progress_count>127)
+        throw std::logic_error("no_progress_count must not be larger than 100");
     assignBitPattern<std::uint8_t>(bitBoard,bitStartInd,no_progress_count,7);
     bitStartInd += 7;
     
     std::bitset<7> probabilityIntBitMax;
     probabilityIntBitMax.flip();
     double probabilityMax = static_cast<double>(probabilityIntBitMax.to_ulong());
+    if(probability<0 || probability>1)
+        throw std::logic_error("probability must be inside [0,1]");
     probability = probability*probabilityMax;
     std::uint8_t probabilityInt = static_cast<std::uint8_t>(probability);
     assignBitPattern<std::uint8_t>(bitBoard,bitStartInd,probabilityInt,7);

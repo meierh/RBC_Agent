@@ -28,6 +28,7 @@
 #ifndef RBCAGENT_H
 #define RBCAGENT_H
 
+#include <gtest/gtest.h>
 #include "mctsagentbatch.h"
 #include "chessinformationset.h"
 #include <stdexcept>
@@ -46,7 +47,7 @@
 #include "util/gcthread.h"
 */
 
-using namespace crazyara;
+namespace crazyara {
 
 class RBCAgent : public MCTSAgentBatch
 {
@@ -184,7 +185,10 @@ private:
     /**
      * @brief
      */
-    void handleMoveInfo();  
+    void handleMoveInfo();
+    
+    FRIEND_TEST(rbcagentfullchessinfo_test, FEN_test);
 };
+}
 
 #endif // RBCAGENT_H

@@ -2,6 +2,7 @@
 
 #include "unittest_informationset.h"
 #include "unittest_chessinformationset.h"
+#include "unittest_rbcagent.h"
 
 int main(int argc, char **argv)
 {
