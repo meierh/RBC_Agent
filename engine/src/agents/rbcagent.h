@@ -148,9 +148,14 @@ private:
      * @param side
      * @return
      */
-    std::unique_ptr<FullChessInfo> getDecodedStatePlane
+    std::unique_ptr<FullChessInfo> decodeStatePlane
     (
         StateObj *pos
+    ) const;
+    
+    StateObj* encodeStatePlane
+    (
+        std::unique_ptr<FullChessInfo>
     ) const;
     
     /**

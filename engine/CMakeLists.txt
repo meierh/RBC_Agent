@@ -543,11 +543,16 @@ endif()
 
 ### Unit Tests Helge Meier RBC ###
 # Locate GTest
-file(GLOB tested_cpp "src/agents/chessinformationset.cpp" "src/agents/rbcagent.cpp")
+#file(GLOB tested_cpp "src/agents/*")
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 file(GLOB test_files "unittest/unittests.cpp")
-list(APPEND test_files ${tested_cpp})
+list(APPEND test_files ${source_files})
+list(REMOVE_ITEM test_files "${CMAKE_CURRENT_SOURCE_DIR}/src/uci/main.cpp")
+message("${CMAKE_CURRENT_SOURCE_DIR}/src/uci/main.cpp")
+foreach(file IN LISTS test_files)
+    message(${file})
+endforeach()
 add_executable(unittests ${test_files})
 target_link_libraries(unittests ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES})
 gtest_discover_tests(unittests)

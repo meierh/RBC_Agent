@@ -52,8 +52,8 @@ constexpr std::uint64_t chessInfoSize= 6*64 + // pieces {pawn,knight,bishop,rook
 class ChessInformationSet : public InformationSet<chessInfoSize>
 {
     public:
-        enum class ChessColumn {A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7};
-        enum class ChessRow {one=0,two=1,three=2,four=3,five=4,six=5,seven=6,eight=7};
+        enum class ChessColumn : std::uint8_t {A=0,B=1,C=2,D=3,E=4,F=5,G=6,H=7};
+        enum class ChessRow : std::uint8_t {one=0,two=1,three=2,four=3,five=4,six=5,seven=6,eight=7};
         class Square
         {
             public:
@@ -102,9 +102,10 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
 
                 std::string to_string() const
                 {
-                    char col = 'a' + static_cast<uint>(column);
-                    char row = '1' + static_cast<uint>(row);
-                    return std::string() + col + row;
+                    char colChar = 'a' + static_cast<uint>(column);
+                    char rowChar = '1' + static_cast<uint>(row);
+                    //std::cout<<"row:"<<rowChar<<"  delta:"<<unsigned(static_cast<uint>(rowChar))<<"   "<<(row==ChessRow::three)<<std::endl;
+                    return std::string() + colChar + rowChar;
                 };
                 
             private:
@@ -112,7 +113,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         };
         enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
                           rook1=8,knight1=9,bishop1=10,queen=11,king=12,bishop2=13,knight2=14,rook2=15};
-        enum class PieceType{pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5,empty=6};
+        enum class PieceType : std::uint8_t {pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5,empty=6};
         static PieceType OpenSpielPieceType_to_CISPieceType(const open_spiel::chess::PieceType os_pT);
         static open_spiel::chess::PieceType CISPieceType_to_OpenSpielPieceType(const PieceType cis_pT);
 
@@ -415,6 +416,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         std::queue<std::uint64_t> incompatibleBoards;
         
         FRIEND_TEST(chessinformationsetsquare_test, constructorAndEqual_test);
+        FRIEND_TEST(chessinformationsetsquare_test, toString_test);
         FRIEND_TEST(chessinformationsetsquare_test, generalmovement_test);
         FRIEND_TEST(chessinformationsetsquare_test, validSquare_test);
         FRIEND_TEST(chessinformationset_test, encodeDecode_test);

@@ -156,27 +156,29 @@ std::string RBCAgent::FullChessInfo::getFEN
         for(const CIS::Square& sq : oneColorInfo.en_passant)
         {
             if(enPassantString.size()>0)
-                throw std::logic_error("Pieces overlay!");
+                throw std::logic_error("More than one en_passant is not possible!");
+            enPassantString += sq.to_string();
+            /*
             unsigned int column = static_cast<unsigned int>(sq.column);
             unsigned int row = static_cast<unsigned int>(sq.row);
             char columnChar = column + 97;
             char rowChar = row + 60;
             enPassantString += columnChar;
             enPassantString += rowChar;
+            */
         }
         
         charOffset+=32;
     }
     
-    if(white.no_progress_count != black.no_progress_count)
-        throw std::logic_error("Mismatch in no progress count!");
-    halfTurns = white.no_progress_count;
+    halfTurns = std::min(white.no_progress_count,black.no_progress_count);
         
     //Build string
     std::string piecePlacement;
     std::vector<std::string> piecePlacementRows;
-    for(std::array<char,8> oneRow : chessBoard)
+    for(std::int8_t row=7; row>=0; --row)
     {
+        const std::array<char,8>& oneRow = chessBoard[row];
         std::string oneRowStr;
         std::queue<char> oneRowQ;
         std::for_each(oneRow.begin(),oneRow.end(),[&](char entry){oneRowQ.push(entry);});
@@ -492,7 +494,7 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
     return generateHypotheses(piecesOpponent,this->playerPiecesTracker,this->selfColor);
 }
 
-std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::getDecodedStatePlane
+std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeStatePlane
 (
     StateObj *pos
 ) const
@@ -644,7 +646,7 @@ void RBCAgent::handleOpponentMoveInfo
 {
     using CIS = ChessInformationSet;
     
-    std::unique_ptr<FullChessInfo> observation = getDecodedStatePlane(pos);
+    std::unique_ptr<FullChessInfo> observation = decodeStatePlane(pos);
     CIS::OnePlayerChessInfo& selfObs = (selfColor==white)?observation->white:observation->black;
     CIS::OnePlayerChessInfo& selfState = playerPiecesTracker;
 
@@ -714,7 +716,7 @@ void RBCAgent::handleScanInfo
 {
     using CIS = ChessInformationSet;
     
-    std::unique_ptr<FullChessInfo> observation = getDecodedStatePlane(pos);
+    std::unique_ptr<FullChessInfo> observation = decodeStatePlane(pos);
     CIS::OnePlayerChessInfo& opponentObs = (selfColor==white)?observation->black:observation->white;
 
     std::vector<CIS::BoardClause> conditions;

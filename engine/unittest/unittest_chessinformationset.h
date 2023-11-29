@@ -16,6 +16,19 @@ TEST(chessinformationsetsquare_test, constructorAndEqual_test)
     EXPECT_EQ(sq1,sq4);
 }
 
+TEST(chessinformationsetsquare_test, toString_test)
+{
+    using CIS = ChessInformationSet;
+    CIS::Square sq1(CIS::ChessColumn::B,CIS::ChessRow::three);
+    CIS::Square sq2(CIS::ChessColumn::A,CIS::ChessRow::seven);
+    CIS::Square sq3(CIS::ChessColumn::E,CIS::ChessRow::one);
+    CIS::Square sq4(CIS::ChessColumn::B,CIS::ChessRow::three);
+    EXPECT_EQ(sq1.to_string(),"b3");
+    EXPECT_EQ(sq2.to_string(),"a7");
+    EXPECT_EQ(sq3.to_string(),"e1");
+    EXPECT_EQ(sq4.to_string(),"b3");
+}
+
 TEST(chessinformationsetsquare_test, generalmovement_test)
 {
     using CIS = ChessInformationSet;
