@@ -639,6 +639,162 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeStatePlane
     return info;
 }
 
+std::unique_ptr<std::vector<float>> RBCAgent::encodeStatePlane
+(
+    const std::unique_ptr<RBCAgent::FullChessInfo> fullState,
+    const RBCAgent::PieceColor nextTurn,
+    const unsigned int nextCompleteTurn
+) const
+{
+    using CIS = ChessInformationSet;
+    auto fullChessInfoPlane = std::make_unique<std::vector<float>>(net->get_nb_input_values_total(),0.0);
+    std::vector<float>& infoPlane = *fullChessInfoPlane;
+    std::array<CIS::OnePlayerChessInfo*,2> state = {&(fullState->white),&(fullState->black)};
+    
+    std::uint16_t offset = 0;
+    for(std::uint16_t color=0; color<state.size(); color++)
+    {
+        if(state[color]->pawns.size()>8)
+            std::logic_error("Can not have more than 8 pawns");
+        for(const CIS::Square& sq : state[color]->pawns)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            infoPlane[offset+index] = 1.0;
+        }
+        offset+=64;
+        
+        if(state[color]->knights.size()>2)
+            std::logic_error("Can not have more than 2 knights");
+        for(const CIS::Square& sq : state[color]->knights)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            infoPlane[offset+index] = 1.0;
+        }
+        offset+=64;
+        
+        if(state[color]->bishops.size()>2)
+            std::logic_error("Can not have more than 2 bishops");
+        for(const CIS::Square& sq : state[color]->bishops)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            infoPlane[offset+index] = 1.0;
+        }
+        offset+=64;
+        
+        if(state[color]->rooks.size()>2)
+            std::logic_error("Can not have more than 2 rooks");
+        for(const CIS::Square& sq : state[color]->rooks)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            infoPlane[offset+index] = 1.0;
+        }
+        offset+=64;
+        
+        if(state[color]->queens.size()>9)
+            std::logic_error("Can not have more than 9 queens");
+        for(const CIS::Square& sq : state[color]->queens)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            infoPlane[offset+index] = 1.0;
+        }
+        offset+=64;
+        
+        if(state[color]->kings.size()>9)
+            std::logic_error("Can not have more than 1 kings");
+        for(const CIS::Square& sq : state[color]->kings)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            infoPlane[offset+index] = 1.0;
+        }
+        offset+=64;
+    }
+      
+    auto putScalarToBoard = [](std::vector<float>& infoPlane, std::uint16_t offset, float value)
+    {
+        for(std::uint16_t index=offset; index<64; index++)
+        {
+            infoPlane[index] = value;
+        }
+    };
+    
+    float repetitions_1 = 0;
+    putScalarToBoard(infoPlane,offset,repetitions_1);
+    offset+=64;
+    
+    float repetitions_2 = 0;
+    putScalarToBoard(infoPlane,offset,repetitions_2);
+    offset+=64;
+    
+    std::array<float,5> pocketCountWhite = {0,0,0,0,0};
+    for(float pocketCountPiece : pocketCountWhite)
+    {
+        putScalarToBoard(infoPlane,offset,pocketCountPiece);
+        offset+=64;
+    }
+    
+    std::array<float,5> pocketCountBlack = {0,0,0,0,0};
+    for(float pocketCountPiece : pocketCountBlack)
+    {
+        putScalarToBoard(infoPlane,offset,pocketCountPiece);
+        offset+=64;
+    }
+    
+    float whitePromotions = 0;
+    putScalarToBoard(infoPlane,offset,whitePromotions);
+    offset+=64;
+    
+    float blackPromotions = 0;
+    putScalarToBoard(infoPlane,offset,blackPromotions);
+    offset+=64;
+    
+    if(nextTurn == PieceColor::white)
+    {
+        for(const CIS::Square& sq : state[0]->en_passant)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            infoPlane[offset+index] = 1.0;
+        }
+    }
+    else if(nextTurn == PieceColor::black)
+    {
+        for(const CIS::Square& sq : state[1]->en_passant)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            infoPlane[offset+index] = 1.0;
+        }
+    }
+    else
+        throw std::logic_error("Current turn can not be empty");
+    offset+=64;
+    
+    float colorVal = (nextTurn==PieceColor::white)?1.0:0.0;
+    putScalarToBoard(infoPlane,offset,colorVal);
+    offset+=64;
+    
+    putScalarToBoard(infoPlane,offset,nextCompleteTurn);
+    offset+=64;
+    
+    for(std::uint16_t color=0; color<state.size(); color++)
+    {
+        if(state[color]->kingside)
+        {
+            putScalarToBoard(infoPlane,offset,1);
+            offset+=64;
+        }
+        if(state[color]->queenside)
+        {
+            putScalarToBoard(infoPlane,offset,1);
+            offset+=64;
+        }
+    }
+    
+    float halfTurns = std::min(fullState->white.no_progress_count,fullState->black.no_progress_count);
+    putScalarToBoard(infoPlane,offset,halfTurns);
+    offset+=64;
+
+    return fullChessInfoPlane;
+}
+
 void RBCAgent::handleOpponentMoveInfo
 (
     StateObj *pos

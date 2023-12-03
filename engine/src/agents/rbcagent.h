@@ -153,10 +153,14 @@ private:
         StateObj *pos
     ) const;
     
-    StateObj* encodeStatePlane
+    std::unique_ptr<std::vector<float>> encodeStatePlane
     (
-        std::unique_ptr<FullChessInfo>
+        const std::unique_ptr<FullChessInfo> fullState,
+        const PieceColor nextTurn,
+        const unsigned int nextCompleteTurn
     ) const;
+    
+    
     
     /**
      * @brief

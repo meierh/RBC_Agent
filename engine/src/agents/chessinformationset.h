@@ -322,6 +322,26 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 FRIEND_TEST(chessinformationsetboardclause_test, evalOperator_test);
         };
         
+        class Distribution
+        {
+            public:
+                std::array<double,64> pawns;
+                std::array<double,64> knights;
+                std::array<double,64> bishops;
+                std::array<double,64> rooks;
+                std::array<double,64> queens;
+                std::array<double,64> kings;
+            
+                double kingside;
+                double queenside;
+            
+                std::array<double,64> en_passant;
+            
+                double no_progress_count;            
+        };
+        
+        std::unique_ptr<Distribution> computeDistribution();
+        
         /**
          * Marks boards incompatible with observations
          * @param noPieces

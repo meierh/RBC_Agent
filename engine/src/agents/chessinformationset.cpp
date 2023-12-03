@@ -329,6 +329,97 @@ std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard
     return bits;
 }
 
+std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeDistribution()
+{
+    using CIS = ChessInformationSet;
+    
+    auto cis_distribution = std::make_unique<Distribution>();
+    std::uint64_t numberOfBoards = 0;
+    for(auto iter = this->begin(); iter!=this->end(); iter++,numberOfBoards++)
+    {
+        std::unique_ptr<std::pair<OnePlayerChessInfo,double>> oneBoard = *iter;
+        double probability = oneBoard->second;
+        const OnePlayerChessInfo& pieceData = oneBoard->first;
+        
+        std::array<double,64>& pawnDist = cis_distribution->pawns;
+        for(const CIS::Square& sq : pieceData.pawns)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            pawnDist[index] += 1.0;
+        }
+
+        std::array<double,64>& knightDist = cis_distribution->knights;
+        for(const CIS::Square& sq : pieceData.knights)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            knightDist[index] += 1.0;
+        }
+
+        std::array<double,64>& bishopDist = cis_distribution->bishops;
+        for(const CIS::Square& sq : pieceData.bishops)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            bishopDist[index] += 1.0;
+        }
+
+        std::array<double,64>& rookDist = cis_distribution->rooks;
+        for(const CIS::Square& sq : pieceData.rooks)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            rookDist[index] += 1.0;
+        }
+
+        std::array<double,64>& queenDist = cis_distribution->queens;
+        for(const CIS::Square& sq : pieceData.queens)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            queenDist[index] += 1.0;
+        }
+        
+        std::array<double,64>& kingDist = cis_distribution->kings;
+        for(const CIS::Square& sq : pieceData.kings)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            kingDist[index] += 1.0;
+        }
+        
+        if(pieceData.kingside)
+            cis_distribution->kingside += 1.0;
+
+        if(pieceData.queenside)
+            cis_distribution->queenside += 1.0;
+        
+        std::array<double,64>& en_passantDist = cis_distribution->en_passant;
+        for(const CIS::Square& sq : pieceData.en_passant)
+        {
+            unsigned int index = CIS::squareToBoardIndex(sq);
+            en_passantDist[index] += 1.0;
+        }
+        
+        cis_distribution->no_progress_count += pieceData.no_progress_count;
+    }
+    
+    auto divideBoard = [](std::array<double,64> board, std::uint64_t value)
+    {
+        for(double& count : board)
+            count /= value;
+    };
+    
+    divideBoard(cis_distribution->pawns,numberOfBoards);
+    divideBoard(cis_distribution->knights,numberOfBoards);
+    divideBoard(cis_distribution->bishops,numberOfBoards);
+    divideBoard(cis_distribution->rooks,numberOfBoards);
+    divideBoard(cis_distribution->queens,numberOfBoards);
+    divideBoard(cis_distribution->kings,numberOfBoards);
+    cis_distribution->kingside /= numberOfBoards;
+    cis_distribution->queenside /= numberOfBoards;
+    divideBoard(cis_distribution->en_passant,numberOfBoards);   
+    cis_distribution->no_progress_count /= numberOfBoards;
+    
+    return cis_distribution;    
+}
+
+
 void ChessInformationSet::add
 (
     ChessInformationSet::OnePlayerChessInfo& item,
