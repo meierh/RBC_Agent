@@ -32,30 +32,20 @@
 #include "mctsagentbatch.h"
 #include "chessinformationset.h"
 #include <stdexcept>
-
-/*
-#include "../evalinfo.h"
-#include "../node.h"
-#include "../stateobj.h"
-#include "../nn/neuralnetapi.h"
-#include "config/searchsettings.h"
-#include "config/searchlimits.h"
-#include "config/playsettings.h"
-#include "../searchthread.h"
-#include "../manager/timemanager.h"
-#include "../manager/threadmanager.h"
-#include "util/gcthread.h"
-*/
+#include <iostream>
+#include <random>
 
 namespace crazyara {
 
-class RBCAgent : public MCTSAgentBatch
+class RBCAgent : public MCTSAgent
+
 {
     using CIS = ChessInformationSet;
     
 private:   
     enum Player {Self, Opponent};
     enum PieceColor {white=0,black=1,empty=-1};
+    enum MovePhase {sense=0,move=1};
     static open_spiel::chess::Color AgentColor_to_OpenSpielColor(const PieceColor agent_pC);
     static PieceColor OpenSpielColor_to_RBCColor(const open_spiel::chess::Color os_pC);
     
@@ -65,6 +55,12 @@ private:
             CIS::OnePlayerChessInfo white;
             CIS::OnePlayerChessInfo black;
             
+            MovePhase currentPhase;
+            bool lastMoveCapturedPiece;
+            PieceColor nextTurn;
+            bool lastMoveIllegal;
+            unsigned int nextCompleteTurn;
+            
             static std::string getFEN
             (
                 const CIS::OnePlayerChessInfo& white,
@@ -73,30 +69,35 @@ private:
                 const unsigned int nextCompleteTurn
             );
             
-            std::string getFEN
-            (
-                const PieceColor nextTurn,
-                const unsigned int nextCompleteTurn
-            ) const
+            std::string getFEN() const
             {
                 return getFEN(this->white,this->black,nextTurn,nextCompleteTurn);
             };
     };
 
-    ChessInformationSet cis;
     CIS::OnePlayerChessInfo playerPiecesTracker;
     PieceColor selfColor;
     unsigned int currentTurn;
+    
+    EvalInfo* evalInfo = nullptr;
+    StateObj* chessOpenSpiel;
 
+protected:
+    std::random_device rd;
+    std::mt19937 gen;
+    std::uniform_int_distribution<unsigned short> randomScanDist;
+    std::uniform_int_distribution<std::uint64_t> randomHypotheseSelect;
+    std::unique_ptr<ChessInformationSet> cis;
+    
+    std::pair<std::array<std::uint8_t,9>,std::array<CIS::Square,9>> getSensingBoardIndexes(CIS::Square sq);
+    
 public:
     RBCAgent
     (
         NeuralNetAPI* netSingle,
         vector<unique_ptr<NeuralNetAPI>>& netBatches,
         SearchSettings* searchSettings,
-        PlaySettings* playSettings,
-        int iterations,
-        bool splitNodes
+        PlaySettings* playSettings
     );
     //~RBCAgent();
     RBCAgent(const RBCAgent&) = delete;
@@ -118,13 +119,18 @@ public:
     );
     
     /**
+     * @brief perform_action Selects an action based on the evaluation result
+     */
+    void perform_action();
+    
+    /**
      * @brief
      * @param piecesSelf
      * @param piecesOpponent
      * @param selfColor
      * @return
      */
-    std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> generateHypotheses
+    std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> generateHypotheses
     (
         ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
         ChessInformationSet::OnePlayerChessInfo& piecesSelf,
@@ -137,7 +143,7 @@ private:
      * @param piecesSelf
      * @return
      */
-    std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> generateHypotheses
+    std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> generateHypotheses
     (
         ChessInformationSet::OnePlayerChessInfo& piecesOpponent
     );
@@ -148,7 +154,7 @@ private:
      * @param side
      * @return
      */
-    std::unique_ptr<FullChessInfo> decodeStatePlane
+    std::unique_ptr<FullChessInfo> decodeObservation
     (
         StateObj *pos
     ) const;
@@ -159,8 +165,6 @@ private:
         const PieceColor nextTurn,
         const unsigned int nextCompleteTurn
     ) const;
-    
-    
     
     /**
      * @brief
@@ -175,11 +179,27 @@ private:
      * @brief
      * @param pos
      */
+    void handleSelfMoveInfo
+    (
+        StateObj *pos
+    );
+    
+    /**
+     * @brief
+     * @param pos
+     */
     ChessInformationSet::Square applyScanAction
     (
         StateObj *pos
     );
-
+    /**
+     * @brief
+     * @param pos
+     */
+    ChessInformationSet::Square selectScanAction
+    (
+        StateObj *pos
+    );    
     /**
      * @brief
      * @param pos
@@ -194,7 +214,17 @@ private:
     /**
      * @brief
      */
-    void handleMoveInfo();
+    std::unique_ptr<FullChessInfo> selectHypothese();
+    
+    /**
+     * @brief
+     */
+    StateObj* setupMoveSearchState();
+    
+    /**
+     * @brief
+     */
+    void stepForwardHypotheses();
     
     FRIEND_TEST(rbcagentfullchessinfo_test, FEN_test);
 };

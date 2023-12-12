@@ -106,9 +106,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     char rowChar = '1' + static_cast<uint>(row);
                     //std::cout<<"row:"<<rowChar<<"  delta:"<<unsigned(static_cast<uint>(rowChar))<<"   "<<(row==ChessRow::three)<<std::endl;
                     return std::string() + colChar + rowChar;
-                };
-                
-            private:
+                };                
+                std::pair<std::int8_t,std::int8_t> diffToSquare(const Square& sq);
                 bool moveSquare(std::int8_t deltaCol, std::int8_t deltaRow);                
         };
         enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
@@ -117,21 +116,23 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         static PieceType OpenSpielPieceType_to_CISPieceType(const open_spiel::chess::PieceType os_pT);
         static open_spiel::chess::PieceType CISPieceType_to_OpenSpielPieceType(const PieceType cis_pT);
 
+        //Analouge to openspiel/games/chess/chess.h IndexToSquare
         static Square boardIndexToSquare(std::uint8_t index)
         {
-            std::uint8_t x = index / 8; //column {A-H}
-            std::uint8_t y = index % 8; //row {1-8}
+            std::uint8_t x = index % 8; //column {A-H}
+            std::uint8_t y = index / 8; //row {1-8}
             ChessInformationSet::Square sq;
             sq.column = static_cast<ChessInformationSet::ChessColumn>(x);
             sq.row = static_cast<ChessInformationSet::ChessRow>(y);
             return sq;
         };
-        
+
+        //Analouge to openspiel/games/chess/chess.h SquareToIndex
         static std::uint8_t squareToBoardIndex(Square sq)
         {
             std::uint8_t x = static_cast<std::uint8_t>(sq.column); //column {A-H}
             std::uint8_t y = static_cast<std::uint8_t>(sq.row); //row {1-8}
-            return x*8+y;
+            return y*8+x;
         };
         
         class OnePlayerChessInfo
@@ -248,6 +249,11 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 std::vector<PieceType> boardPlaceTypes;
                 std::vector<bool> conditionBool;
             public:
+                BoardClause()
+                {
+                    literalNbr = 0;
+                };
+                
                 BoardClause(Square boardPlace,PieceType boardPlaceType)
                 {
                     boardPlaces.push_back(boardPlace);
@@ -337,7 +343,10 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             
                 std::array<double,64> en_passant;
             
-                double no_progress_count;            
+                double no_progress_count;
+                
+                double getProbability(const Square& sq, const PieceType pT) const;
+                double getProbability(const std::uint8_t sqInd, const PieceType pT) const;
         };
         
         std::unique_ptr<Distribution> computeDistribution();
@@ -350,11 +359,13 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          */
         void markIncompatibleBoards(const std::vector<BoardClause>& conditions);
         
+        void removeIncompatibleBoards();
+        
         void add(OnePlayerChessInfo& item, double probability);
         
         void add(std::vector<std::pair<OnePlayerChessInfo,double>>& items);
         
-        ChessInformationSet();        
+        ChessInformationSet();
     protected:
         /**
          * Sets the pieces in a given board
@@ -422,6 +433,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 ChessInformationSet* cis;
         };
         
+    public:
         CIS_Iterator begin() noexcept
         {
             return CIS_Iterator(this);
@@ -430,6 +442,11 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         CIS_Iterator end() noexcept
         {
             return CIS_Iterator(this,this->size());
+        };
+        
+        CIS_Iterator remove(CIS_Iterator iter)
+        {
+            return remove(iter);
         };
         
     private:

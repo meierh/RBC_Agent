@@ -29,30 +29,22 @@
 #include <fstream>
 #include "rbcagent.h"
 
-/*
-#include "../evalinfo.h"
-#include "../constants.h"
-#include "../util/blazeutil.h"
-#include "../manager/treemanager.h"
-#include "../manager/threadmanager.h"
-#include "../node.h"
-#include "../util/communication.h"
-#include "util/gcthread.h"
-*/
-
 
 RBCAgent::RBCAgent
 (
     NeuralNetAPI *netSingle,
     vector<unique_ptr<NeuralNetAPI>>& netBatches,
     SearchSettings* searchSettings,
-    PlaySettings* playSettings,
-    int noa,
-    bool sN
+    PlaySettings* playSettings
 ):
-MCTSAgentBatch(netSingle, netBatches, searchSettings, playSettings, noa, sN),
+MCTSAgent(netSingle, netBatches, searchSettings, playSettings),
 currentTurn(0)
-{}
+{
+    std::cout<<"Create RBCAgent"<<std::endl;
+    gen = std::mt19937(rd());
+    randomScanDist = std::uniform_int_distribution<unsigned short>(1,6);
+    cis = std::make_unique<ChessInformationSet>();
+}
 
 open_spiel::chess::Color RBCAgent::AgentColor_to_OpenSpielColor
 (
@@ -100,6 +92,52 @@ RBCAgent::PieceColor RBCAgent::OpenSpielColor_to_RBCColor
     return result;
     
 }
+
+std::pair<std::array<std::uint8_t,9>,std::array<RBCAgent::CIS::Square,9>> RBCAgent::getSensingBoardIndexes(RBCAgent::CIS::Square sq)
+{
+    std::bitset<8> senseSquaresValid;
+    
+    std::pair<std::array<std::uint8_t,9>,std::array<CIS::Square,9>> result;
+    std::array<std::uint8_t,9>& senseBoardIndexes = result.first;
+    std::array<CIS::Square,9>& senseBoardSquares = result.second;
+    
+    senseBoardIndexes[0] = CIS::squareToBoardIndex(sq);
+    senseBoardSquares[0] = sq;
+    
+    senseSquaresValid[0] = sq.vertPlus(1);
+    senseBoardIndexes[1] = CIS::squareToBoardIndex(sq);
+    senseBoardSquares[1] = sq;
+    
+    senseSquaresValid[1] = sq.horizPlus(1);
+    senseBoardIndexes[2] = CIS::squareToBoardIndex(sq);
+    senseBoardSquares[2] = sq;
+    
+    for(uint i=0; i<2; i++)
+    {
+        senseSquaresValid[i+2] = sq.vertMinus(1);
+        senseBoardIndexes[i+3] = CIS::squareToBoardIndex(sq);
+        senseBoardSquares[i+3] = sq;
+    }
+    
+    for(uint i=0; i<2; i++)
+    {
+        senseSquaresValid[i+4] = sq.horizMinus(1);
+        senseBoardIndexes[i+5] = CIS::squareToBoardIndex(sq);
+        senseBoardSquares[i+5] = sq;
+    }
+    
+    for(uint i=0; i<2; i++)
+    {
+        senseSquaresValid[i+6] = sq.vertPlus(1);
+        senseBoardIndexes[i+7] = CIS::squareToBoardIndex(sq);
+        senseBoardSquares[i+7] = sq;
+    }   
+    
+    if(!senseSquaresValid.all())
+        throw std::logic_error("Invalid sensing area");
+    return result;    
+}
+
 
 std::string RBCAgent::FullChessInfo::getFEN
 (
@@ -230,14 +268,36 @@ void RBCAgent::set_search_settings
     EvalInfo* evalInfo
 )
 {
-    handleOpponentMoveInfo(pos);
+    //Reduce hypotheses using the previous move information
+    if(currentTurn!=0 || selfColor!=PieceColor::black)
+    {
+        handleOpponentMoveInfo(pos);
+        stepForwardHypotheses();
+    }
+    
+    //Scan the board an reduce hypotheses
     ChessInformationSet::Square scanCenter = applyScanAction(pos);
     handleScanInfo(pos,scanCenter);
     
-    MCTSAgentBatch::set_search_settings(pos,searchLimits,evalInfo);
+    // setup MCTS search
+    this->evalInfo = evalInfo;
+    StateObj* chessOpenSpiel = setupMoveSearchState();
+    MCTSAgent::set_search_settings(chessOpenSpiel,searchLimits,evalInfo);
 }
 
-std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::generateHypotheses
+void RBCAgent::perform_action()
+{
+    // Run mcts tree and set action to game
+    MCTSAgent::perform_action();
+    
+    //Reduce hypotheses using the own move information
+    state->do_action(evalInfo->bestMove);
+    handleSelfMoveInfo(state);
+    state->undo_action(evalInfo->bestMove);
+    delete chessOpenSpiel;
+}
+
+std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> RBCAgent::generateHypotheses
 (
     ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
     ChessInformationSet::OnePlayerChessInfo& piecesSelf,
@@ -249,28 +309,30 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
     
     using CIS_Square = ChessInformationSet::Square;
     using CIS_CPI = ChessInformationSet::OnePlayerChessInfo;
-    auto hypotheses = std::make_unique<std::vector<CIS_CPI>>();
+    auto hypotheses = std::make_unique<std::vector<std::pair<CIS_CPI,double>>>();
     
     FullChessInfo fullState;
     PieceColor opponentColor;
     unsigned int nextCompleteTurn;
+    
+    // switch positions to get all legal actions
     if(selfColor == PieceColor::white)
     {
         fullState.white = piecesSelf;
         fullState.black = piecesOpponent;
-        opponentColor = PieceColor::black;
-        nextCompleteTurn = currentTurn;
+        fullState.nextTurn = PieceColor::black;
+        fullState.nextCompleteTurn = currentTurn;
     }
     else
     {
         fullState.white = piecesOpponent;
         fullState.black = piecesSelf;
-        opponentColor = PieceColor::white;
-        nextCompleteTurn = currentTurn+1;
+        fullState.nextTurn = PieceColor::white;
+        fullState.nextCompleteTurn = currentTurn+1;
     }
-    std::string fen = fullState.getFEN(opponentColor,nextCompleteTurn);
-    OpenSpielState hypotheticState;
-    hypotheticState.set(fen,false,StateConstants::DEFAULT_VARIANT());
+    std::string fen = fullState.getFEN();
+    OpenSpielState hypotheticState(open_spiel::gametype::SupportedOpenSpielVariants::RBC);
+    hypotheticState.set(fen,false,open_spiel::gametype::SupportedOpenSpielVariants::RBC);
     std::vector<Action> legal_actions_int = hypotheticState.legal_actions();
     std::vector<open_spiel::chess::Move> legal_actions_move(legal_actions_int.size());
     for(unsigned int actionInd=0; actionInd<legal_actions_int.size(); actionInd++)
@@ -286,8 +348,8 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
         CIS::PieceType promPieceType = CIS::OpenSpielPieceType_to_CISPieceType(move.promotion_type);
         bool castling = move.is_castling;
         
-        hypotheses->push_back(piecesOpponent);
-        CIS::OnePlayerChessInfo& new_hypothese = hypotheses->back();
+        hypotheses->push_back({piecesOpponent,0});
+        CIS::OnePlayerChessInfo& new_hypothese = hypotheses->back().first;
         
         // test for color match
         if(moveColor!=opponentColor)
@@ -486,7 +548,7 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
     return hypotheses;
 }
 
-std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::generateHypotheses
+std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> RBCAgent::generateHypotheses
 (
     ChessInformationSet::OnePlayerChessInfo& piecesOpponent
 )
@@ -494,7 +556,7 @@ std::unique_ptr<std::vector<ChessInformationSet::OnePlayerChessInfo>> RBCAgent::
     return generateHypotheses(piecesOpponent,this->playerPiecesTracker,this->selfColor);
 }
 
-std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeStatePlane
+std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
 (
     StateObj *pos
 ) const
@@ -505,136 +567,175 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeStatePlane
     float* inputPlanes =  inputPlanesSmPtr.get();
     pos->get_state_planes(true,inputPlanes,1);
     
+    std::string observationString = pos->get_state_string();
+    std::vector<std::string> observationStringParts;
+    std::string::size_type index;
+    while((index=observationString.find(" "))!=std::string::npos)
+    {
+        observationStringParts.push_back(observationString.substr(0,index));
+        observationString = observationString.substr(index+1);
+    }
+    observationStringParts.push_back(observationString);
+    if(observationStringParts.size()!=6)
+        throw std::logic_error("Invalid observation string");
+
+    
     std::uint16_t offset = 0;    
     auto info = std::make_unique<FullChessInfo>();
     std::array<CIS::OnePlayerChessInfo*,2> obs = {&(info->white),&(info->black)};
     
-    //pieces position
+    auto pieceReader = [&](std::vector<CIS::Square>& piecesList, uint limit, std::string pieceTypeName)
+    {
+        std::array<float,64> board;
+        std::memcpy(board.data(),pos+offset,64);
+        for(unsigned int index=0; index<piecesList.size(); index++)
+        {
+            if(board[index]>0.5)
+            {
+                piecesList.push_back(CIS::boardIndexToSquare(index));
+            }
+        }
+        if(piecesList.size()>limit)
+            std::logic_error("Can not have more than "+std::to_string(limit)+" of "+pieceTypeName);
+        offset+=64;
+    };
+    
+    auto scalarReader = [&]()
+    {
+        std::array<float,64> board;
+        std::memcpy(board.data(),pos+offset,64);
+        offset+=64;
+        return board[0];
+    };
+    
+    auto binaryReader = [&]()
+    {
+        float num = scalarReader();
+        return (num==0.0f)?false:true;
+    };
+    
+    std::string phaseString = observationStringParts[2];
+    MovePhase currentPhase;
+    if(phaseString=="s")
+        currentPhase = MovePhase::sense;
+    else if(phaseString=="m")
+        currentPhase = MovePhase::move;
+    else
+        throw std::logic_error("Illegal phaseString string");
+    info->currentPhase = currentPhase;
+    
+    std::string captureString = observationStringParts[3];
+    bool lastMoveCapturedPiece=false;
+    if(captureString=="c")
+        lastMoveCapturedPiece = true;
+    else if(captureString=="-")
+        lastMoveCapturedPiece = false;
+    else
+        throw std::logic_error("Illegal capture string");
+    info->lastMoveCapturedPiece = lastMoveCapturedPiece;    
+    
+    std::string sideToPlayString = observationStringParts[4];
+    PieceColor currentSideToPlay = PieceColor::empty;
+    if(sideToPlayString=="w")
+        currentSideToPlay = PieceColor::white;
+    else if(sideToPlayString=="b")
+        currentSideToPlay = PieceColor::black;
+    else
+        throw std::logic_error("Illegal sideToPlay string");
+    info->nextTurn = currentSideToPlay;    
+    
+    std::string illegalMoveString = observationStringParts[5];
+    bool lastMoveIllegal=false;
+    if(illegalMoveString=="c")
+        lastMoveIllegal = true;
+    else if(illegalMoveString=="-")
+        lastMoveIllegal = false;
+    else
+        throw std::logic_error("Illegal illegal move string");
+    info->lastMoveIllegal = lastMoveIllegal;
+    
+    //pieces position white & black 0-11
+    std::string piecesString = observationStringParts[0];
     for(std::uint16_t color=0; color<obs.size(); color++)
     {
-        std::array<float,64> pawns;
-        std::memcpy(pawns.data(),pos+offset,64);
-        for(unsigned int index=0; index<pawns.size(); index++)
-        {
-            if(pawns[index]>0.5)
-            {
-                obs[color]->pawns.push_back(CIS::boardIndexToSquare(index));
-            }
-        }
-        if(obs[color]->pawns.size()>8)
-            std::logic_error("Can not have more than 8 pawns");
-        offset+=64;
-
-        
-        std::array<float,64> knights;
-        std::memcpy(knights.data(),pos+offset,64);
-        for(unsigned int index=0; index<knights.size(); index++)
-        {
-            if(knights[index]>0.5)
-            {
-                obs[color]->knights.push_back(CIS::boardIndexToSquare(index));
-            }
-        }
-        if(obs[color]->knights.size()>2)
-            std::logic_error("Can not have more than 2 knights");
-        offset+=64;
-        
-        std::array<float,64> bishops;
-        std::memcpy(bishops.data(),pos+offset,64);
-        for(unsigned int index=0; index<bishops.size(); index++)
-        {
-            if(bishops[index]>0.5)
-            {
-                obs[color]->bishops.push_back(CIS::boardIndexToSquare(index));
-            }
-        }
-        if(obs[color]->bishops.size()>2)
-            std::logic_error("Can not have more than 2 bishops");
-        offset+=64;
-        
-        std::array<float,64> rooks;
-        std::memcpy(rooks.data(),pos+offset,64);
-        for(unsigned int index=0; index<rooks.size(); index++)
-        {
-            if(rooks[index]>0.5)
-            {
-                obs[color]->rooks.push_back(CIS::boardIndexToSquare(index));
-            }
-        }
-        if(obs[color]->rooks.size()>2)
-            std::logic_error("Can not have more than 2 rooks");
-        offset+=64;
-        
-        std::array<float,64> queens;
-        std::memcpy(queens.data(),pos+offset,64);
-        for(unsigned int index=0; index<queens.size(); index++)
-        {
-            if(queens[index]>0.5)
-            {
-                obs[color]->queens.push_back(CIS::boardIndexToSquare(index));
-            }
-        }
-        if(obs[color]->queens.size()>1)
-            std::logic_error("Can not have more than 1 queens");
-        offset+=64;
-        
-        std::array<float,64> kings;
-        std::memcpy(kings.data(),pos+offset,64);
-        for(unsigned int index=0; index<kings.size(); index++)
-        {
-            if(kings[index]>0.5)
-            {
-                obs[color]->kings.push_back(CIS::boardIndexToSquare(index));
-            }
-        }
-        if(obs[color]->kings.size()>1)
-            std::logic_error("Can not have more than 1 kings");
-        offset+=64;
+        pieceReader(obs[color]->kings,1,"kings");
+        pieceReader(obs[color]->queens,9,"queens");
+        pieceReader(obs[color]->rooks,10,"rooks");
+        pieceReader(obs[color]->bishops,10,"bishops");
+        pieceReader(obs[color]->knights,10,"knights");
+        pieceReader(obs[color]->pawns,8,"pawns");
     }
     
-    offset += 2*64;  // repetitions 1&2
-    offset += 5*64;  // white pocket pieces
-    offset += 5*64;  // black pocket pieces
-    offset += 2*64;  // white&black promotions
+    // repetitions 1&2 12-13
+    uint nr_rep=0;
+    bool repetitions_1 = binaryReader();
+    bool repetitions_2 = binaryReader();
+    if(repetitions_1==false && repetitions_2==false)
+        nr_rep = 1;
+    else if(repetitions_1==true && repetitions_2==false)
+        nr_rep = 2;
+    else if(repetitions_1==true && repetitions_2==true)
+        nr_rep = 2;
+    else
+        throw std::logic_error("Invalid repetitions");
     
-    std::array<float,64> en_passant;
-    std::memcpy(en_passant.data(),pos+offset,64);
-    // Decode en_passent here
+    // En_passant 14
+    std::vector<CIS::Square> en_passant;
+    pieceReader(en_passant,1,"en_passant");
+    obs[0]->en_passant=en_passant;
+    obs[1]->en_passant=en_passant;
     
-    offset += 1*64;  // turn color
-    offset += 1*64;  // total move communication
-    
+    // Castling 15-18
+    std::string castlingString = observationStringParts[1];
+    bool rightCastlingStr = false;
+    bool leftCastlingStr = false;
+    for(char letter : castlingString)
+    {
+        if(letter='K')
+            rightCastlingStr=true;
+        else if(letter='Q')
+            leftCastlingStr=true;
+        else
+            throw std::logic_error("Invalid castling substring");
+    }    
     for(std::uint16_t color=0; color<obs.size(); color++)
-    {        
-        std::array<float,64> castle_king_side;
-        std::memcpy(castle_king_side.data(),pos+offset,64);
-        if(castle_king_side[0]>0.5)
-        {
-            obs[color]->kingside=true;
-        }
-        else
-        {
-            obs[color]->kingside=false;
-        }
-        offset+=64;
-        
-        std::array<float,64> castle_queen_side;
-        std::memcpy(castle_queen_side.data(),pos+offset,64);
-        if(castle_queen_side[0]>0.5)
-        {
-            obs[color]->queenside=true;
-        }
-        else
-        {
-            obs[color]->queenside=false;
-        }
-        offset+=64;
+    {
+        bool right_castling = binaryReader();
+        obs[color]->kingside = right_castling;
+        bool left_castling = binaryReader();
+        obs[color]->queenside = left_castling;
     }
+    std::int8_t colorInd = static_cast<std::int8_t>(currentSideToPlay);
+    if(!(obs[colorInd]->kingside==rightCastlingStr &&
+         obs[colorInd]->queenside==leftCastlingStr))
+        throw std::logic_error("Castling mismatch or wrong color to play infered!");
+
+    // no_progress_count 19
+    float no_progress_float = scalarReader();
+    uint no_progress_count = static_cast<uint>(no_progress_float);
+    obs[0]->no_progress_count=static_cast<std::uint8_t>(no_progress_count);
+    obs[1]->no_progress_count=static_cast<std::uint8_t>(no_progress_count);
     
-    std::array<float,64> no_progress_count;
-    std::memcpy(no_progress_count.data(),pos+offset,64);
-    obs[0]->no_progress_count=static_cast<std::uint8_t>(no_progress_count[0]);
-    obs[1]->no_progress_count=static_cast<std::uint8_t>(no_progress_count[0]);
+    offset += 16*64; //Last move
+    offset += 1*64; //960 chess
+    offset += 1*64; //White Piece Mask
+    offset += 1*64; //Black Piece Mask
+    offset += 1*64; //Checkerboard
+    
+    int whitePawnsExcess = static_cast<int>(scalarReader());
+    int whiteKnightsExcess = static_cast<int>(scalarReader());
+    int whiteBishopsExcess = static_cast<int>(scalarReader());
+    int whiteRooksExcess = static_cast<int>(scalarReader());
+    int whiteQueensExcess = static_cast<int>(scalarReader());
+
+    offset += 1*64; //OP Bishops
+    offset += 1*64; //Checkers
+    
+    int whitePawnsNumber = static_cast<int>(scalarReader());
+    int whiteKnightsNumber = static_cast<int>(scalarReader());
+    int whiteBishopsNumber = static_cast<int>(scalarReader());
+    int whiteRooksNumber = static_cast<int>(scalarReader());
+    int whiteQueensNumber = static_cast<int>(scalarReader());
     
     return info;
 }
@@ -802,7 +903,7 @@ void RBCAgent::handleOpponentMoveInfo
 {
     using CIS = ChessInformationSet;
     
-    std::unique_ptr<FullChessInfo> observation = decodeStatePlane(pos);
+    std::unique_ptr<FullChessInfo> observation = decodeObservation(pos);
     CIS::OnePlayerChessInfo& selfObs = (selfColor==white)?observation->white:observation->black;
     CIS::OnePlayerChessInfo& selfState = playerPiecesTracker;
 
@@ -861,7 +962,255 @@ void RBCAgent::handleOpponentMoveInfo
         }
     }
     
-    cis.markIncompatibleBoards(conditions);
+    cis->markIncompatibleBoards(conditions);
+    cis->removeIncompatibleBoards();
+}
+
+void RBCAgent::handleSelfMoveInfo
+(
+    StateObj *pos
+)
+{
+    using CIS = ChessInformationSet;
+    
+    std::unique_ptr<FullChessInfo> observation = decodeObservation(pos);
+    if(observation->nextTurn==selfColor || selfColor==PieceColor::empty)
+        throw std::logic_error("Wrong turn marker");
+    if(observation->currentPhase!=MovePhase::sense)
+        throw std::logic_error("Wrong move phase marker");
+        
+    CIS::OnePlayerChessInfo& selfObs = (selfColor==white)?observation->white:observation->black;
+    std::function<std::pair<bool,CIS::PieceType>(const CIS::Square&)> squareToPiece;
+    squareToPiece = selfObs.getSquarePieceTypeCheck();
+    
+    Action selfLastAction = this->evalInfo->bestMove;
+    open_spiel::chess::Move selfLastMove = pos->ActionToMove(selfLastAction);
+    
+    //Test for castling
+    bool castling = selfLastMove.is_castling;
+
+    //Test for promotion
+    CIS::PieceType promotionType = CIS::OpenSpielPieceType_to_CISPieceType(selfLastMove.promotion_type);
+    bool promotion = (promotionType!=CIS::PieceType::empty)?true:false;        
+
+    // Find moved piece and determine the squares
+    CIS::Square fromSquare = CIS::Square(selfLastMove.from);
+    CIS::Square toSquareAim = CIS::Square(selfLastMove.to);
+    std::pair<bool,CIS::PieceType> fromPiece = squareToPiece(fromSquare);
+    if(!fromPiece.first)
+        throw std::logic_error("Move from empty square");
+    CIS::PieceType initialMovePiece = fromPiece.second;
+
+    //Find toSquareReal
+    CIS::Square toSquareReal;
+    std::vector<CIS::Square> previousStateMovePieces;
+    std::vector<CIS::Square> currentStateMovePieces;    
+    switch (initialMovePiece)
+    {
+        case CIS::PieceType::pawn:
+            previousStateMovePieces = playerPiecesTracker.pawns;
+            currentStateMovePieces = selfObs.pawns;
+            break;
+        case CIS::PieceType::knight:
+            previousStateMovePieces = playerPiecesTracker.knights;
+            currentStateMovePieces = selfObs.knights;
+            break;
+        case CIS::PieceType::bishop:
+            previousStateMovePieces = playerPiecesTracker.bishops;
+            currentStateMovePieces = selfObs.bishops;
+            break;
+        case CIS::PieceType::rook:
+            previousStateMovePieces = playerPiecesTracker.rooks;
+            currentStateMovePieces = selfObs.rooks;
+            break;
+        case CIS::PieceType::queen:
+            previousStateMovePieces = playerPiecesTracker.queens;
+            currentStateMovePieces = selfObs.queens;
+            break;
+        case CIS::PieceType::king:
+            previousStateMovePieces = playerPiecesTracker.kings;
+            currentStateMovePieces = selfObs.kings;
+            break;
+        default:
+            throw std::logic_error("Moved piece is empty!");
+    }
+    if(promotion)
+    {
+        toSquareReal = toSquareAim;
+        /*
+        switch (promotionType)
+        {
+            case CIS::PieceType::knight:
+                currentStateMovePieces = selfObs.knights;
+                break;
+            case CIS::PieceType::bishop:
+                currentStateMovePieces = selfObs.bishops;
+                break;
+            case CIS::PieceType::rook:
+                currentStateMovePieces = selfObs.rooks;
+                break;
+            case CIS::PieceType::queen:
+                currentStateMovePieces = selfObs.queens;
+                break;
+            default:
+                throw std::logic_error("Promotion to invalid piece!");
+        }
+        */
+    }
+    else
+    {
+        std::unordered_set<CIS::Square,CIS::Square::Hasher> previousStateSquareSet(previousStateMovePieces.begin(),previousStateMovePieces.end());
+        bool pieceMoved = false;
+        for(const CIS::Square& sq : currentStateMovePieces)
+        {
+            auto iter = previousStateSquareSet.find(sq);
+            if(iter!=previousStateSquareSet.end())
+            {
+                if(pieceMoved)
+                    throw std::logic_error("More than one piece of one typeMove from empty square");
+                pieceMoved=true;
+                toSquareReal = *iter;
+            }
+        }
+        if(!pieceMoved)
+            toSquareReal = fromSquare;
+    }
+
+    std::vector<CIS::BoardClause> conditions;
+    if(observation->lastMoveIllegal)
+    {
+        if(promotion)
+            throw std::logic_error("Promotion can not be an illegal move");
+        if(observation->lastMoveCapturedPiece)
+        // piece movement stopped prematurely, special moves like en_passant, castling and promotion are not possible here
+        {
+            if(fromSquare==toSquareReal)
+                throw std::logic_error("Capture while no piece movement!");
+            if(castling)
+                throw std::logic_error("Castling can not capture piece!");
+            CIS::BoardClause pieceAtToSquare(toSquareReal,CIS::BoardClause::PieceType::any);
+            conditions.push_back(pieceAtToSquare);
+        }
+        else
+        {
+            if(fromSquare!=toSquareReal)
+                throw std::logic_error("Illegal move but movement and no capture!");
+            if(castling)
+            // enemy piece prevents castling
+            {
+                CIS::ChessRow castlingRow = (selfColor==PieceColor::black)?CIS::ChessRow::eight:CIS::ChessRow::one;
+                std::vector<CIS::ChessColumn> castlingCol;
+                if(playerPiecesTracker.kingside && !selfObs.kingside)
+                    //move was castling to kingside
+                    castlingCol = {CIS::ChessColumn::F,CIS::ChessColumn::G};
+                else if(playerPiecesTracker.queenside && !selfObs.queenside)
+                    //mode was castling to queenside
+                    castlingCol = {CIS::ChessColumn::B,CIS::ChessColumn::C,CIS::ChessColumn::D};
+                else
+                    throw std::logic_error("Castling move but no castling rights!");
+                
+                CIS::BoardClause castlingClause;
+                for(CIS::ChessColumn col : castlingCol)
+                {
+                    CIS::Square sq(col,castlingRow);
+                    castlingClause = castlingClause | CIS::BoardClause(sq,CIS::BoardClause::PieceType::none);
+                }
+                conditions.push_back(castlingClause);
+            }
+            else if(initialMovePiece==CIS::PieceType::pawn)
+            // enemy piece prevents pawn movement
+            {
+                if(fromSquare.column==toSquareAim.column)
+                // Failed forward move
+                {
+                    CIS::Square squareBeforePawn = fromSquare;
+                    if(selfColor==PieceColor::white)
+                        squareBeforePawn.vertPlus(1);
+                    else
+                        squareBeforePawn.vertMinus(1);
+                    conditions.push_back(CIS::BoardClause(squareBeforePawn,CIS::BoardClause::PieceType::any));
+                }
+                else
+                // Failed en_passant move
+                {
+                    CIS::Square squareNextToPawn = {toSquareAim.column,fromSquare.row};
+                    CIS::BoardClause noPawnHere(squareNextToPawn,CIS::BoardClause::PieceType::pawn);
+                    noPawnHere = !noPawnHere;
+                    conditions.push_back(noPawnHere);
+                }
+            }
+            else
+            {
+                throw std::logic_error("Non castling and non pawn illegal move must be capturing!");
+            }
+        }
+    }
+    else
+    {
+        if(toSquareAim!=toSquareReal)
+            throw std::logic_error("Legal move but target and reality differs!");
+        if(observation->lastMoveCapturedPiece)
+        {
+            if(fromSquare==toSquareReal)
+                throw std::logic_error("Capture while no piece movement!");
+            if(castling)
+                throw std::logic_error("Castling can not capture piece!");
+            
+            if(initialMovePiece==CIS::PieceType::pawn)
+            // pawn captures piece in two possible ways
+            {
+                CIS::Square squareNextToPawn = {toSquareAim.column,fromSquare.row};
+                CIS::BoardClause en_passantCapture(squareNextToPawn,CIS::BoardClause::PieceType::pawn);
+                CIS::BoardClause conventionalCapture(toSquareReal,CIS::BoardClause::PieceType::any);
+                conditions.push_back(en_passantCapture | conventionalCapture);
+            }
+            else
+            //capture by any other piece
+            {
+                conditions.push_back(CIS::BoardClause(toSquareReal,CIS::BoardClause::PieceType::any));
+            }
+        }
+        else
+        {
+            if(initialMovePiece==CIS::PieceType::knight)
+            {
+                conditions.push_back(CIS::BoardClause(toSquareReal,CIS::BoardClause::PieceType::none));
+            }
+            else
+            {
+                auto [delta_col,delta_row] = fromSquare.diffToSquare(toSquareReal);
+                
+                enum Dir {Straight,Diagonal};
+                Dir movementDir;
+                if(fromSquare.row==toSquareReal.row || fromSquare.column==toSquareReal.column)
+                {
+                    movementDir = Dir::Straight;
+                    if(delta_col!=0 && delta_row!=0)
+                        throw std::logic_error("Invalid movement difference!");
+                }
+                else
+                {
+                    movementDir = Dir::Diagonal;
+                    if(std::abs(delta_col)!=std::abs(delta_row))
+                        throw std::logic_error("Invalid movement difference!");
+                }
+                delta_col = (delta_col!=0)?delta_col/std::abs(delta_col):0;
+                delta_row = (delta_row!=0)?delta_row/std::abs(delta_row):0;
+                
+                CIS::Square squareIteration = fromSquare;
+                while(squareIteration!=toSquareReal)
+                {
+                    bool valid = squareIteration.moveSquare(delta_col,delta_row);
+                    if(!valid)
+                        throw std::logic_error("Piece can not move over invalid square");
+                    conditions.push_back(CIS::BoardClause(squareIteration,CIS::BoardClause::PieceType::none));
+                }
+            }
+        }
+    }
+        
+    cis->markIncompatibleBoards(conditions);
+    cis->removeIncompatibleBoards();
 }
 
 void RBCAgent::handleScanInfo
@@ -872,7 +1221,7 @@ void RBCAgent::handleScanInfo
 {
     using CIS = ChessInformationSet;
     
-    std::unique_ptr<FullChessInfo> observation = decodeStatePlane(pos);
+    std::unique_ptr<FullChessInfo> observation = decodeObservation(pos);
     CIS::OnePlayerChessInfo& opponentObs = (selfColor==white)?observation->black:observation->white;
 
     std::vector<CIS::BoardClause> conditions;
@@ -899,7 +1248,67 @@ void RBCAgent::handleScanInfo
             conditions.push_back(observedPiece);
         }
     }
-    cis.markIncompatibleBoards(conditions);
+    cis->markIncompatibleBoards(conditions);
+    cis->removeIncompatibleBoards();
+}
+
+ChessInformationSet::Square RBCAgent::selectScanAction
+(
+    StateObj *pos
+)
+{
+    using CIS=ChessInformationSet;
+    
+    unsigned short col = randomScanDist(gen);
+    unsigned short row = randomScanDist(gen);
+    CIS::Square randomScanSq = {static_cast<CIS::ChessColumn>(col),static_cast<CIS::ChessRow>(row)};
+    return randomScanSq;
+}
+
+std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
+{
+    using CIS = ChessInformationSet;
+    
+    randomHypotheseSelect = std::uniform_int_distribution<std::uint64_t>(0,cis->size());
+    std::uint64_t selectedBoard = randomHypotheseSelect(gen);
+    auto iter = cis->begin();
+    for(int i=0;i<selectedBoard;i++)
+    {
+        if(iter==cis->end())
+            iter = cis->begin();
+        else
+            iter++;
+    }
+    std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,double>> selectedHypothese = *iter;
+    
+    auto fullInfoSet = std::make_unique<FullChessInfo>();
+    
+    if(selfColor = PieceColor::white)
+    {
+        fullInfoSet->white = playerPiecesTracker;
+        fullInfoSet->black = selectedHypothese->first;
+        fullInfoSet->nextTurn = PieceColor::white;
+    }
+    else
+    {
+        fullInfoSet->black = playerPiecesTracker;
+        fullInfoSet->white = selectedHypothese->first;
+        fullInfoSet->nextTurn = PieceColor::black;
+    }
+    fullInfoSet->currentPhase = MovePhase::move;
+    fullInfoSet->lastMoveCapturedPiece = false;
+    fullInfoSet->lastMoveIllegal = false;
+    fullInfoSet->nextCompleteTurn = currentTurn;
+    
+    return fullInfoSet;
+}
+
+StateObj* RBCAgent::setupMoveSearchState()
+{
+    chessOpenSpiel = new OpenSpielState(open_spiel::gametype::SupportedOpenSpielVariants::CHESS);
+    std::unique_ptr<FullChessInfo> searchState = selectHypothese();
+    chessOpenSpiel->set(searchState->getFEN(),false,open_spiel::gametype::SupportedOpenSpielVariants::CHESS);
+    return chessOpenSpiel;
 }
 
 ChessInformationSet::Square RBCAgent::applyScanAction
@@ -907,5 +1316,35 @@ ChessInformationSet::Square RBCAgent::applyScanAction
     StateObj *pos
 )
 {
-    return {ChessInformationSet::ChessColumn::A,ChessInformationSet::ChessRow::one}; // dummy
+    CIS::Square scanSq = selectScanAction(pos);
+    pos->do_action(CIS::squareToBoardIndex(scanSq));
+    return scanSq;
+}
+
+void RBCAgent::stepForwardHypotheses()
+{
+    cis->clearRemoved();
+    auto newCis = std::make_unique<CIS>();
+    for(auto iter=cis->begin(); iter!=cis->end(); iter++)
+    {
+        CIS::OnePlayerChessInfo& hypoPiecesOpponent = (*iter)->first;
+        double probability = (*iter)->second;
+        std::unique_ptr<std::vector<std::pair<CIS::OnePlayerChessInfo,double>>> newHypotheses;
+        newHypotheses = generateHypotheses(hypoPiecesOpponent);
+        for(auto& oneHypothese : *newHypotheses)
+            oneHypothese.second = probability;
+        cis->remove(iter);
+        
+        try
+        {
+            newCis->add(*newHypotheses);
+        }
+        catch(const std::bad_alloc& e)
+        {
+            cis->clearRemoved();
+            iter = cis->begin();
+            newCis->add(*newHypotheses);
+        }
+    }
+    cis = std::move(newCis);
 }

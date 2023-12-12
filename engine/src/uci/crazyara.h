@@ -35,6 +35,11 @@
 #include "agents/mctsagentbatch.h"
 #include "agents/randomagent.h"
 #include "agents/mctsagenttruesight.h"
+
+#include "agents/rbcagent.h"
+#include "agents/maxentropysenseagent.h"
+#include "../rl/gamepgn.h"
+
 #include "nn/neuralnetapi.h"
 #include "agents/config/searchsettings.h"
 #include "agents/config/searchlimits.h"
@@ -176,6 +181,11 @@ public:
      * The output format is "name <uci-option> value <uci-option-value>" followed by "readyok" at the very end.
      */
     void activeuci();
+    
+    /**
+     * Testing method for rbcAgent
+     */
+    void rbcTest();
 
 #ifdef USE_RL
     /**

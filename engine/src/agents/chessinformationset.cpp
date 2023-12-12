@@ -257,6 +257,47 @@ std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,double>> Chess
     
     return board;
 }
+
+double ChessInformationSet::Distribution::getProbability
+(
+    const ChessInformationSet::Square& sq,
+    const ChessInformationSet::PieceType pT
+) const
+{
+    return getProbability(squareToBoardIndex(sq),pT);
+}
+
+double ChessInformationSet::Distribution::getProbability
+(
+    const std::uint8_t sqInd,
+    const ChessInformationSet::PieceType pT
+) const
+{
+    switch (pT)
+    {
+        case PieceType::pawn:
+            return pawns[sqInd];
+        case PieceType::knight:
+            return knights[sqInd];
+        case PieceType::bishop:
+            return bishops[sqInd];
+        case PieceType::rook:
+            return rooks[sqInd];
+        case PieceType::queen:
+            return queens[sqInd];
+        case PieceType::king:
+            return kings[sqInd];
+        default:
+            double prob = 1.0;
+            prob -= pawns[sqInd];
+            prob -= knights[sqInd];
+            prob -= bishops[sqInd];
+            prob -= rooks[sqInd];
+            prob -= queens[sqInd];
+            prob -= kings[sqInd];
+            return prob;
+    }        
+}
         
 std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard
 (
@@ -435,8 +476,12 @@ void ChessInformationSet::add
     std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>& items
 )
 {
-    for(std::pair<OnePlayerChessInfo,double>& item : items)
-        add(item.first,item.second);
+    std::vector<std::bitset<chessInfoSize>> encodedItems(items.size());
+    for(uint i=0; i<items.size(); i++)
+    {
+        encodedItems[i] = *encodeBoard(items[i].first,items[i].second);
+    }
+    InformationSet<chessInfoSize>::add(encodedItems);
 }
 
 void ChessInformationSet::markIncompatibleBoards
@@ -445,9 +490,9 @@ void ChessInformationSet::markIncompatibleBoards
 )
 {
     std::unique_ptr<std::pair<OnePlayerChessInfo,double>> board;
-    for(std::uint64_t infoSetIndex = 0; infoSetIndex<this->size(); infoSetIndex++)
+    for(auto iter=begin(); iter!=end(); iter++)
     {
-        board = getBoard(infoSetIndex);
+        board = *iter;
         OnePlayerChessInfo& piecesInfo = board->first;
         
         bool incompatibleBoard = true;
@@ -457,7 +502,17 @@ void ChessInformationSet::markIncompatibleBoards
         }
         
         if(incompatibleBoard)
-            incompatibleBoards.push(infoSetIndex);
+            incompatibleBoards.push(iter.getCurrentIndex());
+    }
+}
+
+void ChessInformationSet::removeIncompatibleBoards()
+{
+    while(!incompatibleBoards.empty())
+    {
+        std::uint64_t ind = incompatibleBoards.front();
+        InformationSet<chessInfoSize>::remove(ind);
+        incompatibleBoards.pop();
     }
 }
 
@@ -528,5 +583,18 @@ bool ChessInformationSet::Square::moveSquare(std::int8_t deltaCol, std::int8_t d
     this->column = static_cast<ChessColumn>(ucol);
     this->row = static_cast<ChessRow>(urow);
     return true;
+}
+
+std::pair<std::int8_t,std::int8_t> ChessInformationSet::Square::diffToSquare(const ChessInformationSet::Square& sq)
+{
+    std::int8_t col = static_cast<std::int8_t>(this->column);
+    std::int8_t row = static_cast<std::int8_t>(this->row);
+    std::int8_t sqCol = static_cast<std::int8_t>(sq.column);
+    std::int8_t sqRow = static_cast<std::int8_t>(sq.row);
+    
+    std::int8_t deltaCol = sqCol - col; 
+    std::int8_t deltaRow = sqRow - row;
+    
+    return {deltaCol,deltaRow};
 }
 }

@@ -134,6 +134,7 @@ void CrazyAra::uci_loop(int argc, char *argv[])
         else if (token == "position")   position(state.get(), is);
         else if (token == "ucinewgame") ucinewgame();
         else if (token == "isready")    is_ready<true>();
+        else if (token == "rbcTest")    rbcTest();
 
         // Additional custom non-UCI commands, mainly for debugging
         else if (token == "benchmark")  benchmark(is);
@@ -610,6 +611,74 @@ void CrazyAra::ucinewgame()
         mctsAgent->clear_game_history();
         cout << "info string newgame" << endl;
     }
+}
+
+void CrazyAra::rbcTest()
+{
+    std::cout<<"-----------------------RBC Testing---------------------"<<std::endl;
+    std::unique_ptr<NeuralNetAPI> netSingleContender = create_new_net_single("");
+    std::vector<std::unique_ptr<NeuralNetAPI>> netBatchesContender = create_new_net_batches("");
+    std::cout<<"Created Neural Networks!"<<std::endl;
+    auto whitePlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatches, &searchSettings, &playSettings);
+    auto blackPlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatches, &searchSettings, &playSettings);
+    std::cout<<"Created Players!"<<std::endl;
+    GamePGN gamePGN;
+    unique_ptr<StateObj> state = make_unique<OpenSpielState>(3);
+    std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    std::cout<<"Initialize: "<<fen<<std::endl;
+    
+    gamePGN.white = whitePlayer->get_name();
+    gamePGN.black = blackPlayer->get_name();
+    
+    gamePGN.fen = state->fen();
+    EvalInfo evalInfo;
+
+    RBCAgent* activePlayer;
+    RBCAgent* passivePlayer;
+    // preserve the current active states
+    Result gameResult;
+    do {
+        searchLimits.startTime = now();
+        if (state->side_to_move() == WHITE)
+        {
+            activePlayer = whitePlayer.get();
+            passivePlayer = blackPlayer.get();
+        }
+        else
+        {
+            activePlayer = blackPlayer.get();
+            passivePlayer = whitePlayer.get();
+        }
+        activePlayer->set_search_settings(state.get(), &searchLimits, &evalInfo);
+        activePlayer->perform_action();
+        activePlayer->apply_move_to_tree(evalInfo.bestMove, true);
+        if (state->steps_from_null() != 0) {
+            passivePlayer->apply_move_to_tree(evalInfo.bestMove, false);
+        }
+        string sanMove = state->action_to_san(evalInfo.bestMove, evalInfo.legalMoves, false, false);
+        state->do_action(evalInfo.bestMove);
+        gameResult = state->check_result();
+
+        if(is_win(gameResult))
+        {
+            // replace '+' by '#'
+            if(sanMove[sanMove.size()-1] == '+')
+            {
+                sanMove[sanMove.size()-1] = '#';
+            }
+            // add '#'
+            else
+            {
+                sanMove += "#";
+            }
+        }
+        gamePGN.gameMoves.emplace_back(sanMove);
+    }
+    while(gameResult == NO_RESULT);
+    //set_game_result_to_pgn(gameResult);
+    //write_game_to_pgn(filenamePGNArena, verbose);
+    //clean_up(gamePGN, whitePlayer);
+    //blackPlayer->clear_game_history();   
 }
 
 string CrazyAra::engine_info()

@@ -624,10 +624,12 @@ class InformationSet
             return ++iter;
         };
         
+        /*
         void remove(const IS_Iterator& iterator)
         {
             remove(iterator.getCurrentIndex());
         };
+        */
         
     private:
         std::unique_ptr<std::uint8_t[]> infoSet;

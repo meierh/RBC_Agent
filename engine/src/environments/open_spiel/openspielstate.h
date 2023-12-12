@@ -122,7 +122,7 @@ private:
     inline void check_variant(int variant);
 
 public:
-    OpenSpielState();
+    OpenSpielState(uint8_t variant = open_spiel::gametype::SupportedOpenSpielVariants::RBC);
     OpenSpielState(const OpenSpielState& openSpielState);
 
     // State interface
@@ -130,6 +130,7 @@ public:
     std::vector<Action> legal_actions() const;
     void set(const std::string &fenStr, bool isChess960, int variant);
     void get_state_planes(bool normalize, float *inputPlanes, Version version) const;
+    std::string get_state_string() const;
     unsigned int steps_from_null() const;
     bool is_chess960() const;
     std::string fen() const;

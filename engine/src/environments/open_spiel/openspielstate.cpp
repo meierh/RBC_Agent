@@ -27,12 +27,15 @@
 #include "util/communication.h"
 #include <functional>
 
-OpenSpielState::OpenSpielState():
-    currentVariant(open_spiel::gametype::SupportedOpenSpielVariants::RBC),
-    spielGame(open_spiel::LoadGame(StateConstantsOpenSpiel::variant_to_string(currentVariant))),
-    spielState(spielGame->NewInitialState())
-    
+OpenSpielState::OpenSpielState(uint8_t variant)
 {
+    if(variant>=4)
+        throw std::invalid_argument("Game variant must be in [0,3]");
+    open_spiel::gametype::SupportedOpenSpielVariants gameVariant;
+    gameVariant = static_cast<open_spiel::gametype::SupportedOpenSpielVariants>(variant);
+    currentVariant = gameVariant;
+    spielGame = open_spiel::LoadGame(StateConstantsOpenSpiel::variant_to_string(currentVariant));
+    spielState = spielGame->NewInitialState();
 }
 
 OpenSpielState::OpenSpielState(const OpenSpielState &openSpielState):
@@ -58,7 +61,8 @@ inline void OpenSpielState::check_variant(int variant)
 void OpenSpielState::set(const std::string &fenStr, bool isChess960, int variant)
 {
     check_variant(variant);
-    if (currentVariant == open_spiel::gametype::SupportedOpenSpielVariants::HEX) {
+    if (currentVariant == open_spiel::gametype::SupportedOpenSpielVariants::HEX)
+    {
         info_string_important("NewInitialState from string is not implemented for HEX.");
         return;
     }
@@ -72,6 +76,11 @@ void OpenSpielState::get_state_planes(bool normalize, float *inputPlanes, Versio
     std::vector<float> v(spielGame->ObservationTensorSize());
     spielState->ObservationTensor(spielState->CurrentPlayer(), absl::MakeSpan(v));
     std::copy( v.begin(), v.end(), inputPlanes);
+}
+
+std::string OpenSpielState::get_state_string() const
+{
+    return spielState->ObservationString(spielState->CurrentPlayer());
 }
 
 unsigned int OpenSpielState::steps_from_null() const
@@ -98,11 +107,13 @@ void OpenSpielState::do_action(Action action)
         spielState->ApplyAction(Y*11+X);
         return;
     }
+    /*
     string fen = spielState->ToString();
     string uciAction = spielState->ActionToString(spielState->CurrentPlayer(), action);
     std::cout << fen << "  Apply  " << action << "  " << uciAction << std::endl;
+    */
     spielState->ApplyAction(action);
-    spielState->ApplyAction(001);   // dummy sense action
+    //spielState->ApplyAction(001);   // dummy sense action
 }
 
 void OpenSpielState::undo_action(Action action)
