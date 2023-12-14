@@ -627,6 +627,8 @@ void CrazyAra::rbcTest()
     std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     std::cout<<"Initialize: "<<fen<<std::endl;
     
+    throw std::runtime_error("Temporary Stop");
+    
     gamePGN.white = whitePlayer->get_name();
     gamePGN.black = blackPlayer->get_name();
     
@@ -698,6 +700,7 @@ unique_ptr<NeuralNetAPI> CrazyAra::create_new_net_single(const string& modelDire
 #elif defined OPENVINO
     return make_unique<OpenVinoAPI>(int(Options["First_Device_ID"]), 1, modelDirectory, Options["Threads_NN_Inference"]);
 #endif
+    throw std::runtime_error("No Neural Network could be created");
     return nullptr;
 }
 

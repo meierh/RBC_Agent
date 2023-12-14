@@ -45,6 +45,8 @@
 
 using namespace std;
 
+using namespace nvinfer1;
+
 enum Precision {
     float32,
     float16,
