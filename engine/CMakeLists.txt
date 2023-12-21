@@ -484,6 +484,12 @@ if (BACKEND_TENSORRT)
     link_directories("$ENV{CUDA_PATH}/lib64")
     link_directories("$ENV{CUDA_PATH}/lib/x64")
     link_directories("$ENV{TENSORRT_PATH}/lib")
+    
+    # *****************************************************
+    # Added by Helge Meier
+    #target_link_libraries(${PROJECT_NAME} ${CUDA_LIBRARIES})
+    # *****************************************************
+    
     if(BACKEND_TENSORRT_7)
         if(WIN32)
           find_library(TENSORRT_LIBRARY_MYELIN myelin64_1
@@ -556,3 +562,7 @@ list(REMOVE_ITEM test_files "${CMAKE_CURRENT_SOURCE_DIR}/src/uci/main.cpp")
 add_executable(unittests ${test_files})
 target_link_libraries(unittests ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES})
 gtest_discover_tests(unittests)
+
+message(STATUS "All link libaries")
+get_target_property(OUT ${PROJECT_NAME} LINK_LIBRARIES)
+message(STATUS ${OUT})
