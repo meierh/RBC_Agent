@@ -100,11 +100,11 @@ RUN cd /root \
     && git checkout tags/2.0.5
 ENV Z5_PATH /root/z5/
 
-# Clone the RBC_Agent repository
+# Clone the CrazyAra repository
 # Install python dependencies for training the neural network
 RUN cd /root \
-    && git clone https://github.com/meierh/RBC_Agent.git --recursive \
-    && cd /root/RBC_Agent/DeepCrazyhouse/src/training/ \
+    && git clone https://github.com/QueensGambit/CrazyAra.git --recursive \
+    && cd /root/CrazyAra/DeepCrazyhouse/src/training/ \
     && pip install -r requirements.txt
 
 # prepare setup for mxnet
@@ -120,22 +120,22 @@ RUN apt-get update -y \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
-# Build RBC_Agent executable with reinforcement learning support
+# Build CrazyAra executable with reinforcement learning support
 # --------------------------------------------------------------
-RUN cd /root/RBC_Agent/engine \
+RUN cd /root/CrazyAra/engine \
     && mkdir build \
     && cd build
 RUN if [ "${FRAMEWORK}" = "pytorch" ]; then \
-    cd /root/RBC_Agent/engine/build \
-    && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_RL=ON -DMODE_CRAZYHOUSE=0 -DMODE_CHESS=0 -DMODE_LICHESS=0 -DMODE_OPEN_SPIEL=1 .. \
+    cd /root/CrazyAra/engine/build \
+    && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_RL=ON -DMODE_CRAZYHOUSE=0 -DMODE_CHESS=1 -DMODE_LICHESS=0 .. \
     && make -j8 ; \
 else \
-    cd /root/RBC_Agent/engine/build \
-    && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_RL=ON -DMODE_CRAZYHOUSE=0 -DMODE_CHESS=0 -DMODE_LICHESS=0 -DMODE_OPEN_SPIEL=1 -DBACKEND_TENSORRT_7=ON .. \
+    cd /root/CrazyAra/engine/build \
+    && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_RL=ON -DMODE_CRAZYHOUSE=0 -DMODE_CHESS=1 -DMODE_LICHESS=0 -DBACKEND_TENSORRT_7=ON .. \
     && make -j8 ; \
 fi
 
-ENV WORK_DIR /root/RBC_Agent/engine/build
+ENV WORK_DIR /root/CrazyAra/engine/build
 RUN echo "WORK_DIR: " ${WORK_DIR}
 
 ENV MODEL_NAME ClassicAra-sl-model-wdlp-rise3.3-input3.0
@@ -155,22 +155,22 @@ RUN mkdir ${WORK_DIR}/model \
 
 # Download network for CrazyHouse
 # -------------------------------------
-#RUN echo "Downloading network for crazyhouse..."
-#RUN cd ${WORK_DIR}/model \
-#    && mkdir CrazyAra \
-#    && cd CrazyAra \
-#    && mkdir crazyhouse \
-#    && cd crazyhouse \
-#    && wget https://github.com/QueensGambit/CrazyAra/releases/download/0.9.5/CrazyAra-rl-model-os-96.zip \
-#    && unzip CrazyAra-rl-model-os-96.zip
+RUN echo "Downloading network for crazyhouse..."
+RUN cd ${WORK_DIR}/model \
+    && mkdir CrazyAra \
+    && cd CrazyAra \
+    && mkdir crazyhouse \
+    && cd crazyhouse \
+    && wget https://github.com/QueensGambit/CrazyAra/releases/download/0.9.5/CrazyAra-rl-model-os-96.zip \
+    && unzip CrazyAra-rl-model-os-96.zip
 
 # Download cutechess-cli
 # -------------------------------------
-#RUN echo "Downloading cutechess-cli..."
-#RUN cd /root \
-#    && wget https://github.com/QueensGambit/cutechess/releases/download/1.0.0/cutechess-cli-1.0.0.zip \
-#    && unzip cutechess-cli-1.0.0.zip -d /root \
-#    && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/cutechess-cli/lib
+RUN echo "Downloading cutechess-cli..."
+RUN cd /root \
+    && wget https://github.com/QueensGambit/cutechess/releases/download/1.0.0/cutechess-cli-1.0.0.zip \
+    && unzip cutechess-cli-1.0.0.zip -d /root \
+    && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/cutechess-cli/lib
 
 # Download opening books for chess # er findet aktuell /root/cutechess-cli nicht!
 # -------------------------------------
@@ -180,18 +180,10 @@ RUN cd /root/cutechess-cli \
 
 # Download opening books for crazyhouse # er findet aktuell /root/cutechess-cli nicht!
 # -------------------------------------
-#RUN echo "Downloading opening books for crazyhouse..."
-#RUN cd /root/cutechess-cli \
-#    && wget https://raw.githubusercontent.com/ianfab/books/master/crazyhouse.epd
+RUN echo "Downloading opening books for crazyhouse..."
+RUN cd /root/cutechess-cli \
+    && wget https://raw.githubusercontent.com/ianfab/books/master/crazyhouse.epd
 
-# Install google test framework
-RUN apt-get update -y \
-    && apt-get install libgtest-dev \
-    && cd /usr/src/gtest \
-    && cmake CMakeLists.txt \
-    && make \
-    && cp *.a /usr/lib
-    
 # Install debugging utilities for to allow creating core-dumps "gdb"
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends \
