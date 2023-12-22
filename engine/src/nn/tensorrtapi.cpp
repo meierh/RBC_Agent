@@ -40,10 +40,12 @@
 
 // *****************************************************
 // Added by Helge Meier
+/*
 constexpr float operator "" _GiB(unsigned long long d) {
     // returns radians
     return d*1073741824;
 }
+*/
 // *****************************************************
 
 using namespace sample;
