@@ -38,16 +38,6 @@
 #include "environments/chess_related/chessbatchstream.h"
 #endif
 
-// *****************************************************
-// Added by Helge Meier
-/*
-constexpr float operator "" _GiB(unsigned long long d) {
-    // returns radians
-    return d*1073741824;
-}
-*/
-// *****************************************************
-
 using namespace sample;
 
 TensorrtAPI::TensorrtAPI(int deviceID, unsigned int batchSize, const string &modelDirectory, const string& strPrecision):
