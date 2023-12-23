@@ -45,11 +45,6 @@
 
 using namespace std;
 
-// *****************************************************
-// Added by Helge Meier
-using namespace nvinfer1;
-// *****************************************************
-
 enum Precision {
     float32,
     float16,

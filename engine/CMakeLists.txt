@@ -484,12 +484,7 @@ if (BACKEND_TENSORRT)
     link_directories("$ENV{CUDA_PATH}/lib64")
     link_directories("$ENV{CUDA_PATH}/lib/x64")
     link_directories("$ENV{TENSORRT_PATH}/lib")
-    
-    # *****************************************************
-    # Added by Helge Meier
-    #target_link_libraries(${PROJECT_NAME} ${CUDA_LIBRARIES})
-    # *****************************************************
-    
+
     if(BACKEND_TENSORRT_7)
         if(WIN32)
           find_library(TENSORRT_LIBRARY_MYELIN myelin64_1
@@ -547,22 +542,25 @@ if (BACKEND_TORCH)
     target_link_libraries(${PROJECT_NAME} "${TORCH_LIBRARIES}")
 endif()
 
+get_target_property(MAIN_LINKED ${PROJECT_NAME} LINK_LIBRARIES)
+
 ### Unit Tests Helge Meier RBC ###
 # Locate GTest
-#file(GLOB tested_cpp "src/agents/*")
 find_package(GTest REQUIRED)
 include_directories(${GTEST_INCLUDE_DIRS})
 file(GLOB test_files "unittest/unittests.cpp")
 list(APPEND test_files ${source_files})
 list(REMOVE_ITEM test_files "${CMAKE_CURRENT_SOURCE_DIR}/src/uci/main.cpp")
-#message("${CMAKE_CURRENT_SOURCE_DIR}/src/uci/main.cpp")
-#foreach(file IN LISTS test_files)
-#    message(${file})
-#endforeach()
 add_executable(unittests ${test_files})
 target_link_libraries(unittests ${GTEST_LIBRARIES} ${GTEST_MAIN_LIBRARIES})
-gtest_discover_tests(unittests)
+#message(STATUS "Find linked libraries of main:")
+#message(STATUS ${MAIN_LINKED})
+target_link_libraries(unittests ${MAIN_LINKED})
+#message(STATUS "--------------------")
 
-message(STATUS "All link libaries")
-get_target_property(OUT ${PROJECT_NAME} LINK_LIBRARIES)
-message(STATUS ${OUT})
+#message(STATUS "Find linked libraries of unittest:")
+#get_target_property(UNIT_LINKED unittests LINK_LIBRARIES)
+#message(STATUS ${UNIT_LINKED})
+#message(STATUS "--------------------")
+
+gtest_discover_tests(unittests)
