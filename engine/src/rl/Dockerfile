@@ -30,7 +30,7 @@ ENV FRAMEWORK="pytorch"
 # FROM nvcr.io/nvidia/mxnet:20.09-py3
 # ENV FRAMEWORK="mxnet"
 
-MAINTAINER QueensGambit
+MAINTAINER meierh
 
 # Info message before building
 RUN if [ "${FRAMEWORK}" = "pytorch" ]; then \
@@ -119,6 +119,19 @@ RUN apt-get update -y \
     && apt-get install -y graphviz \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
+
+# Install open_spiel
+RUN cd /root/RBC_Agent/engine/3rdparty/open_spiel \
+    && ./install.sh \
+    && virtualenv -p python3 venv \
+    && source venv/bin/activate \
+    && curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py \
+    && python3 get-pip.py \
+    && pip3 install --upgrade pip \
+    && pip3 install --upgrade setuptools testresources \
+    && python3 -m pip install -r requirements.txt
+RUN ./open_spiel/scripts/build_and_run_tests.sh; exit 0
+
 
 # Build RBC_Agent executable with reinforcement learning support
 # --------------------------------------------------------------
