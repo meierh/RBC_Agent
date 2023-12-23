@@ -30,7 +30,7 @@ ENV FRAMEWORK="pytorch"
 # FROM nvcr.io/nvidia/mxnet:20.09-py3
 # ENV FRAMEWORK="mxnet"
 
-MAINTAINER meierh
+MAINTAINER QueensGambit
 
 # Info message before building
 RUN if [ "${FRAMEWORK}" = "pytorch" ]; then \
@@ -100,7 +100,7 @@ RUN cd /root \
     && git checkout tags/2.0.5
 ENV Z5_PATH /root/z5/
 
-# Clone the RBC_Agent repository
+# Clone the CrazyAra repository
 # Install python dependencies for training the neural network
 RUN cd /root \
     && git clone https://github.com/meierh/RBC_Agent.git --recursive \
@@ -121,30 +121,51 @@ RUN apt-get update -y \
     && rm -rf /var/lib/apt/lists/*
 
 # Install open_spiel
-RUN cd /root/RBC_Agent/engine/3rdparty/open_spiel \
-    && ./install.sh \
-    && virtualenv -p python3 venv \
-    && source venv/bin/activate \
-    && curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py \
-    && python3 get-pip.py \
-    && pip3 install --upgrade pip \
-    && pip3 install --upgrade setuptools testresources \
-    && python3 -m pip install -r requirements.txt
-RUN ./open_spiel/scripts/build_and_run_tests.sh; exit 0
+RUN apt update
+RUN apt-get -y install \
+    clang \
+    curl \
+    git \
+    python3 \
+    python3-dev \
+    python3-pip \
+    python3-setuptools \
+    python3-wheel \
+    sudo
+RUN mkdir /root/RBC_Agent/engine/3rdparty/open_spiel/repo
+WORKDIR /root/RBC_Agent/engine/3rdparty/open_spiel/repo
+RUN sudo pip3 install --upgrade pip
+RUN sudo pip3 install matplotlib
+# install
+COPY . .
+RUN DEBIAN_FRONTEND="noninteractive" apt-get -y install tzdata
+WORKDIR /root/RBC_Agent/engine/3rdparty/open_spiel
+RUN ./install.sh
+RUN pip3 install --upgrade setuptools testresources
+RUN pip3 install --upgrade -r requirements.txt
+RUN pip3 install --upgrade cmake
+# build and test
+RUN mkdir -p /root/RBC_Agent/engine/3rdparty/open_spiel/build
+WORKDIR /root/RBC_Agent/engine/3rdparty/open_spiel/build
+RUN cmake -DPython3_EXECUTABLE=`which python3` -DCMAKE_CXX_COMPILER=`which clang++` ../open_spiel
+RUN make -j12
+ENV PYTHONPATH=${PYTHONPATH}:/root/RBC-Ara/engine/3rdparty/open_spiel/repo
+ENV PYTHONPATH=${PYTHONPATH}:/root/RBC-Ara/engine/3rdparty/open_spiel/repo/build/python
+RUN ctest -j12; exit 0
+WORKDIR /root/RBC_Agent/engine/3rdparty/open_spiel/repo/open_spiel
 
-
-# Build RBC_Agent executable with reinforcement learning support
+# Build CrazyAra executable with reinforcement learning support
 # --------------------------------------------------------------
 RUN cd /root/RBC_Agent/engine \
     && mkdir build \
     && cd build
 RUN if [ "${FRAMEWORK}" = "pytorch" ]; then \
     cd /root/RBC_Agent/engine/build \
-    && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_RL=ON -DMODE_CRAZYHOUSE=0 -DMODE_CHESS=0 -DMODE_LICHESS=0 -DMODE_OPEN_SPIEL=1 .. \
+    && cmake -DCMAKE_BUILD_TYPE=Release .. \
     && make -j8 ; \
 else \
     cd /root/RBC_Agent/engine/build \
-    && cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo -DUSE_RL=ON -DMODE_CRAZYHOUSE=0 -DMODE_CHESS=0 -DMODE_LICHESS=0 -DMODE_OPEN_SPIEL=1 -DBACKEND_TENSORRT_7=ON .. \
+    && cmake -DCMAKE_BUILD_TYPE=Release .. \
     && make -j8 ; \
 fi
 
@@ -168,22 +189,22 @@ RUN mkdir ${WORK_DIR}/model \
 
 # Download network for CrazyHouse
 # -------------------------------------
-#RUN echo "Downloading network for crazyhouse..."
-#RUN cd ${WORK_DIR}/model \
-#    && mkdir CrazyAra \
-#    && cd CrazyAra \
-#    && mkdir crazyhouse \
-#    && cd crazyhouse \
-#    && wget https://github.com/QueensGambit/CrazyAra/releases/download/0.9.5/CrazyAra-rl-model-os-96.zip \
-#    && unzip CrazyAra-rl-model-os-96.zip
+RUN echo "Downloading network for crazyhouse..."
+RUN cd ${WORK_DIR}/model \
+    && mkdir CrazyAra \
+    && cd CrazyAra \
+    && mkdir crazyhouse \
+    && cd crazyhouse \
+    && wget https://github.com/QueensGambit/CrazyAra/releases/download/0.9.5/CrazyAra-rl-model-os-96.zip \
+    && unzip CrazyAra-rl-model-os-96.zip
 
 # Download cutechess-cli
 # -------------------------------------
-#RUN echo "Downloading cutechess-cli..."
-#RUN cd /root \
-#    && wget https://github.com/QueensGambit/cutechess/releases/download/1.0.0/cutechess-cli-1.0.0.zip \
-#    && unzip cutechess-cli-1.0.0.zip -d /root \
-#    && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/cutechess-cli/lib
+RUN echo "Downloading cutechess-cli..."
+RUN cd /root \
+    && wget https://github.com/QueensGambit/cutechess/releases/download/1.0.0/cutechess-cli-1.0.0.zip \
+    && unzip cutechess-cli-1.0.0.zip -d /root \
+    && export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/root/cutechess-cli/lib
 
 # Download opening books for chess # er findet aktuell /root/cutechess-cli nicht!
 # -------------------------------------
@@ -193,18 +214,10 @@ RUN cd /root/cutechess-cli \
 
 # Download opening books for crazyhouse # er findet aktuell /root/cutechess-cli nicht!
 # -------------------------------------
-#RUN echo "Downloading opening books for crazyhouse..."
-#RUN cd /root/cutechess-cli \
-#    && wget https://raw.githubusercontent.com/ianfab/books/master/crazyhouse.epd
+RUN echo "Downloading opening books for crazyhouse..."
+RUN cd /root/cutechess-cli \
+    && wget https://raw.githubusercontent.com/ianfab/books/master/crazyhouse.epd
 
-# Install google test framework
-RUN apt-get update -y \
-    && apt-get install libgtest-dev \
-    && cd /usr/src/gtest \
-    && cmake CMakeLists.txt \
-    && make \
-    && cp *.a /usr/lib
-    
 # Install debugging utilities for to allow creating core-dumps "gdb"
 RUN apt-get update -y \
     && apt-get install -y --no-install-recommends \
