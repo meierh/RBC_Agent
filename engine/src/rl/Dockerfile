@@ -239,6 +239,12 @@ EXPOSE 5000
 ENTRYPOINT [ "/sbin/init" ]
 WORKDIR ${WORK_DIR}
 
+RUN apt-get update -y \
+    && apt-get install -y kate \
+    qt5-default \
+    && apt-get install -qqy x11-apps
+
 CMD cd ${WORK_DIR} \
     && git pull \
-    && /bin/bash
+    && /bin/bash \
+    && xeyes
