@@ -111,14 +111,14 @@ private:
      * @brief createCudaEngineFromONNX Creates a new cuda engine from a onnx model architecture
      * @return ICudaEngine*
      */
-    ICudaEngine* create_cuda_engine_from_onnx();
+    nvinfer1::ICudaEngine* create_cuda_engine_from_onnx();
 
     /**
      * @brief get_cuda_engine Gets a the cuda engine by either loading a pre-existing tensorRT-engine from file or
      * otherwise creating and exporting a new tensorRT engine
      * @return ICudaEngine*
      */
-    ICudaEngine* get_cuda_engine();
+    nvinfer1::ICudaEngine* get_cuda_engine();
 
     /**
      * @brief set_config_settings Sets the configuration object which will be later used to build the engine
@@ -128,7 +128,7 @@ private:
      * @param calibrationStream Calibration stream used for INT8 calibration
      */
     void set_config_settings(SampleUniquePtr<nvinfer1::IBuilderConfig>& config,
-                             size_t maxWorkspace, unique_ptr<IInt8Calibrator>& calibrator,
+                             size_t maxWorkspace, unique_ptr<nvinfer1::IInt8Calibrator>& calibrator,
                              unique_ptr<IBatchStream>& calibrationStream);
 
 
@@ -161,7 +161,7 @@ const char* read_buffer(const string& filePath, size_t& bufferSize);
  * @param layer Layer object
  * @param dataType Precision data type
  */
-void fix_layer_precision(ILayer* layer, nvinfer1::DataType dataType);
+void fix_layer_precision(nvinfer1::ILayer* layer, nvinfer1::DataType dataType);
 
 /**
  * @brief precision_to_str Converts a precision enum to a string
@@ -199,7 +199,7 @@ void set_shape(nn_api::Shape& shape, const nvinfer1::Dims& dims);
  * @param dims Dims object to be set
  * @param shape Target object
  */
-void set_dims(Dims &dims, const nn_api::Shape &shape);
+void set_dims(nvinfer1::Dims &dims, const nn_api::Shape &shape);
 
 #endif
 

@@ -149,7 +149,7 @@ void TensorrtAPI::bind_executor()
 {
     // create an exectution context for applying inference
     context = SampleUniquePtr<nvinfer1::IExecutionContext>(engine->createExecutionContext());
-    Dims inputDims;
+    nvinfer1::Dims inputDims;
     set_dims(inputDims, nnDesign.inputShape);
     context->setBindingDimensions(0, inputDims);
 
@@ -203,16 +203,16 @@ void TensorrtAPI::predict(float* inputPlanes, float* valueOutput, float* probOut
     cudaStreamSynchronize(stream);
 }
 
-ICudaEngine* TensorrtAPI::create_cuda_engine_from_onnx()
+nvinfer1::ICudaEngine* TensorrtAPI::create_cuda_engine_from_onnx()
 {
     info_string("Building TensorRT engine...");
     info_string("This may take a few minutes...");
     // create an engine builder
-    SampleUniquePtr<IBuilder> builder = SampleUniquePtr<IBuilder>(createInferBuilder(gLogger.getTRTLogger()));
+    SampleUniquePtr<nvinfer1::IBuilder> builder = SampleUniquePtr<nvinfer1::IBuilder>(nvinfer1::createInferBuilder(gLogger.getTRTLogger()));
     builder->setMaxBatchSize(int(batchSize));
 
     // create an ONNX network object
-    const uint32_t explicitBatch = 1U << static_cast<uint32_t>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
+    const uint32_t explicitBatch = 1U << static_cast<uint32_t>(nvinfer1::NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
     auto network = SampleUniquePtr<nvinfer1::INetworkDefinition>(builder->createNetworkV2(explicitBatch));
 
     // conversion of ONNX model to TensorRT
@@ -230,40 +230,40 @@ ICudaEngine* TensorrtAPI::create_cuda_engine_from_onnx()
     configure_network(network);
     
     SampleUniquePtr<nvinfer1::IBuilderConfig> config = SampleUniquePtr<nvinfer1::IBuilderConfig>(builder->createBuilderConfig());
-    unique_ptr<IInt8Calibrator> calibrator;
+    unique_ptr<nvinfer1::IInt8Calibrator> calibrator;
     unique_ptr<IBatchStream> calibrationStream;
-    set_config_settings(config, 1_GiB, calibrator, calibrationStream);
+    set_config_settings(config, 1.0_GiB, calibrator, calibrationStream);
 
-    IOptimizationProfile* profile = builder->createOptimizationProfile();
+    nvinfer1::IOptimizationProfile* profile = builder->createOptimizationProfile();
 
-    Dims inputDims = network->getInput(0)->getDimensions();
+    nvinfer1::Dims inputDims = network->getInput(0)->getDimensions();
     inputDims.d[0] = batchSize;
-    profile->setDimensions(nnDesign.inputLayerName.c_str(), OptProfileSelector::kMIN, inputDims);
-    profile->setDimensions(nnDesign.inputLayerName.c_str(), OptProfileSelector::kOPT, inputDims);
-    profile->setDimensions(nnDesign.inputLayerName.c_str(), OptProfileSelector::kMAX, inputDims);
+    profile->setDimensions(nnDesign.inputLayerName.c_str(), nvinfer1::OptProfileSelector::kMIN, inputDims);
+    profile->setDimensions(nnDesign.inputLayerName.c_str(), nvinfer1::OptProfileSelector::kOPT, inputDims);
+    profile->setDimensions(nnDesign.inputLayerName.c_str(), nvinfer1::OptProfileSelector::kMAX, inputDims);
     config->addOptimizationProfile(profile);
 
     // build an engine from the TensorRT network with a given configuration struct
 #ifdef TENSORRT7
     return builder->buildEngineWithConfig(*network, *config);
 #else
-    SampleUniquePtr<IHostMemory> serializedModel{builder->buildSerializedNetwork(*network, *config)};
-    SampleUniquePtr<IRuntime> runtime{createInferRuntime(sample::gLogger.getTRTLogger())};
+    SampleUniquePtr<nvinfer1::IHostMemory> serializedModel{builder->buildSerializedNetwork(*network, *config)};
+    SampleUniquePtr<nvinfer1::IRuntime> runtime{nvinfer1::createInferRuntime(sample::gLogger.getTRTLogger())};
 
     // build an engine from the serialized model
     return runtime->deserializeCudaEngine(serializedModel->data(), serializedModel->size());;
 #endif
 }
 
-ICudaEngine* TensorrtAPI::get_cuda_engine() {
-    ICudaEngine* engine{nullptr};
+nvinfer1::ICudaEngine* TensorrtAPI::get_cuda_engine() {
+    nvinfer1::ICudaEngine* engine{nullptr};
 
     // try to read an engine from file
     size_t bufferSize;
     const char* buffer = read_buffer(trtFilePath, bufferSize);
     if (buffer) {
         info_string("deserialize engine:", trtFilePath);
-        unique_ptr<IRuntime, samplesCommon::InferDeleter> runtime{createInferRuntime(gLogger)};
+        unique_ptr<nvinfer1::IRuntime, samplesCommon::InferDeleter> runtime{nvinfer1::createInferRuntime(gLogger)};
 #ifdef TENSORRT7
         engine = runtime->deserializeCudaEngine(buffer, bufferSize, nullptr);
 #else
@@ -283,7 +283,7 @@ ICudaEngine* TensorrtAPI::get_cuda_engine() {
             info_string("serialize engine:", trtFilePath);
             // serialized engines are not portable across platforms or TensorRT versions
             // engines are specific to the exact GPU model they were built on
-            unique_ptr<IHostMemory, samplesCommon::InferDeleter> enginePlan{engine->serialize()};
+            unique_ptr<nvinfer1::IHostMemory, samplesCommon::InferDeleter> enginePlan{engine->serialize()};
             // export engine for future uses
             // write engine to file
             write_buffer(enginePlan->data(), enginePlan->size(), trtFilePath);
@@ -293,7 +293,7 @@ ICudaEngine* TensorrtAPI::get_cuda_engine() {
 }
 
 void TensorrtAPI::set_config_settings(SampleUniquePtr<nvinfer1::IBuilderConfig>& config,
-                                      size_t maxWorkspace, unique_ptr<IInt8Calibrator>& calibrator,
+                                      size_t maxWorkspace, unique_ptr<nvinfer1::IInt8Calibrator>& calibrator,
                                       unique_ptr<IBatchStream>& calibrationStream)
 {
     config->setMaxWorkspaceSize(maxWorkspace);
@@ -302,10 +302,10 @@ void TensorrtAPI::set_config_settings(SampleUniquePtr<nvinfer1::IBuilderConfig>&
         // default: do nothing
         break;
     case float16:
-        config->setFlag(BuilderFlag::kFP16);
+        config->setFlag(nvinfer1::BuilderFlag::kFP16);
         break;
     case int8:
-        config->setFlag(BuilderFlag::kINT8);
+        config->setFlag(nvinfer1::BuilderFlag::kINT8);
         info_string("run INT8 quantization calibration");
 #ifdef MODE_CHESS
         calibrationStream.reset(new ChessBatchStream(1, 104));
@@ -337,7 +337,7 @@ void TensorrtAPI::configure_network(SampleUniquePtr<nvinfer1::INetworkDefinition
         policyOutputIdx = nnDesign.policyOutputIdx;
     }
 
-    ISoftMaxLayer* softmaxLayer = network->addSoftMax(*network->getOutput(policyOutputIdx));
+    nvinfer1::ISoftMaxLayer* softmaxLayer = network->addSoftMax(*network->getOutput(policyOutputIdx));
     // set the softmax axis to 1
     softmaxLayer->setAxes(1 << 1);
 
@@ -386,7 +386,7 @@ const char* read_buffer(const string& filePath, size_t& bufferSize) {
     return buffer;
 }
 
-void fix_layer_precision(ILayer *layer, nvinfer1::DataType dataType)
+void fix_layer_precision(nvinfer1::ILayer *layer, nvinfer1::DataType dataType)
 {
     layer->setPrecision(dataType);
     for (int idx = 0; idx < layer->getNbOutputs(); ++idx) {
@@ -428,7 +428,7 @@ string precision_to_str(Precision precision)
     return "fp32";
 }
 
-void set_shape(nn_api::Shape &shape, const Dims &dims)
+void set_shape(nn_api::Shape &shape, const nvinfer1::Dims &dims)
 {
     shape.nbDims = dims.nbDims;
     for (int idx = 0; idx < shape.nbDims; ++idx) {
@@ -436,7 +436,7 @@ void set_shape(nn_api::Shape &shape, const Dims &dims)
     }
 }
 
-void set_dims(Dims &dims, const nn_api::Shape &shape)
+void set_dims(nvinfer1::Dims &dims, const nn_api::Shape &shape)
 {
     dims.nbDims = shape.nbDims;
     for (int idx = 0; idx < shape.nbDims; ++idx) {
