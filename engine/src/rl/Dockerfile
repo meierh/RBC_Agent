@@ -239,6 +239,8 @@ EXPOSE 5000
 ENTRYPOINT [ "/sbin/init" ]
 WORKDIR ${WORK_DIR}
 
+
+
 RUN apt-get update -y \
     && apt-get install -y kate \
     qt5-default \
