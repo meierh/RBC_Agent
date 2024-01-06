@@ -84,6 +84,8 @@ void CrazyAra::uci_loop(int argc, char *argv[])
 {
     unique_ptr<StateObj> state = make_unique<StateObj>();
     
+    rbcTest();
+    
     /*
     #include <typeinfo>
     cout<<"type:"<<typeid(*state).name()<<endl;
@@ -616,31 +618,37 @@ void CrazyAra::ucinewgame()
 void CrazyAra::rbcTest()
 {
     std::cout<<"-----------------------RBC Testing---------------------"<<std::endl;
-    std::unique_ptr<NeuralNetAPI> netSingleContender = create_new_net_single("");
-    std::vector<std::unique_ptr<NeuralNetAPI>> netBatchesContender = create_new_net_batches("");
-    std::cout<<"Created Neural Networks!"<<std::endl;
-    auto whitePlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatches, &searchSettings, &playSettings);
-    auto blackPlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatches, &searchSettings, &playSettings);
-    std::cout<<"Created Players!"<<std::endl;
-    GamePGN gamePGN;
     unique_ptr<StateObj> state = make_unique<OpenSpielState>(3);
-    std::string fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    std::cout<<"Initialize: "<<fen<<std::endl;
+    std::string initialFen = state->fen();
     
-    throw std::runtime_error("Temporary Stop");
-    
+    std::string rbcModelsDir = "/home/helge/Uni/Semester_21/Bachelorthesis/RBC_Agent/model/params";
+    std::unique_ptr<NeuralNetAPI> netSingleContender = create_new_net_single(rbcModelsDir);
+    std::cout<<"Created Neural Network!:"<<netSingleContender.get()<<std::endl;
+    std::vector<std::unique_ptr<NeuralNetAPI>> netBatchesContender = create_new_net_batches(rbcModelsDir);
+    std::cout<<"Created Neural Network Batches! (";
+    for(std::unique_ptr<NeuralNetAPI>& net : netBatchesContender)
+        std::cout<<net.get()<<" ";
+    std::cout<<")"<<std::endl;
+
+    auto whitePlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatchesContender, &searchSettings, &playSettings, initialFen, RBCAgent::PieceColor::white);
+    auto blackPlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatchesContender, &searchSettings, &playSettings, initialFen, RBCAgent::PieceColor::black);
+    std::cout<<"Created Players!"<<std::endl;
+        
+    GamePGN gamePGN;
     gamePGN.white = whitePlayer->get_name();
     gamePGN.black = blackPlayer->get_name();
-    
     gamePGN.fen = state->fen();
+    std::cout<<"Initialized: "<<gamePGN.fen<<std::endl;
+
     EvalInfo evalInfo;
+    Result gameResult;
 
     RBCAgent* activePlayer;
     RBCAgent* passivePlayer;
-    // preserve the current active states
-    Result gameResult;
     do {
         searchLimits.startTime = now();
+        
+        // Set player sides
         if (state->side_to_move() == WHITE)
         {
             activePlayer = whitePlayer.get();
@@ -651,10 +659,13 @@ void CrazyAra::rbcTest()
             activePlayer = blackPlayer.get();
             passivePlayer = whitePlayer.get();
         }
+        
+        //
         activePlayer->set_search_settings(state.get(), &searchLimits, &evalInfo);
         activePlayer->perform_action();
         activePlayer->apply_move_to_tree(evalInfo.bestMove, true);
-        if (state->steps_from_null() != 0) {
+        if (state->steps_from_null() != 0)
+        {
             passivePlayer->apply_move_to_tree(evalInfo.bestMove, false);
         }
         string sanMove = state->action_to_san(evalInfo.bestMove, evalInfo.legalMoves, false, false);
@@ -675,6 +686,8 @@ void CrazyAra::rbcTest()
             }
         }
         gamePGN.gameMoves.emplace_back(sanMove);
+        std::cout<<"------------------- half Turn of:"<<activePlayer->getColor()<<"done ---------------------"<<std::endl;
+        throw std::runtime_error("Temp Stop");
     }
     while(gameResult == NO_RESULT);
     //set_game_result_to_pgn(gameResult);

@@ -90,6 +90,8 @@ private:
     
     EvalInfo* evalInfo = nullptr;
     StateObj* chessOpenSpiel;
+    
+    void splitObsFEN(std::string obsFen,std::vector<std::string>& obsFenParts) const;
 
 protected:
     std::random_device rd;
