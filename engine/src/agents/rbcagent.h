@@ -42,9 +42,11 @@ class RBCAgent : public MCTSAgent
 {
     using CIS = ChessInformationSet;
     
+public:
+    enum PieceColor {white=0,black=1,empty=-1};
+    
 private:   
     enum Player {Self, Opponent};
-    enum PieceColor {white=0,black=1,empty=-1};
     enum MovePhase {sense=0,move=1};
     static open_spiel::chess::Color AgentColor_to_OpenSpielColor(const PieceColor agent_pC);
     static PieceColor OpenSpielColor_to_RBCColor(const open_spiel::chess::Color os_pC);
@@ -52,6 +54,9 @@ private:
     class FullChessInfo
     {
         public:
+            FullChessInfo(){};
+            FullChessInfo(std::string fen);
+            
             CIS::OnePlayerChessInfo white;
             CIS::OnePlayerChessInfo black;
             
@@ -72,7 +77,11 @@ private:
             std::string getFEN() const
             {
                 return getFEN(this->white,this->black,nextTurn,nextCompleteTurn);
-            };
+            };      
+            
+            static std::array<std::pair<CIS::PieceType,PieceColor>,64> decodeFENFigurePlacement(std::string);
+            
+            static void splitFEN(std::string fen, std::vector<std::string>& fenParts);
     };
 
     CIS::OnePlayerChessInfo playerPiecesTracker;
@@ -97,11 +106,15 @@ public:
         NeuralNetAPI* netSingle,
         vector<unique_ptr<NeuralNetAPI>>& netBatches,
         SearchSettings* searchSettings,
-        PlaySettings* playSettings
+        PlaySettings* playSettings,
+        std::string fen,
+        PieceColor selfColor
     );
     //~RBCAgent();
     RBCAgent(const RBCAgent&) = delete;
     RBCAgent& operator=(RBCAgent const&) = delete;
+    
+    PieceColor getColor() {return selfColor;};
     
     /**
      * @brief set_search_settings 
@@ -156,7 +169,9 @@ private:
      */
     std::unique_ptr<FullChessInfo> decodeObservation
     (
-        StateObj *pos
+        StateObj *pos,
+        PieceColor observerColor,
+        PieceColor observationTargetColor
     ) const;
     
     std::unique_ptr<std::vector<float>> encodeStatePlane
@@ -227,6 +242,8 @@ private:
     void stepForwardHypotheses();
     
     FRIEND_TEST(rbcagentfullchessinfo_test, FEN_test);
+    FRIEND_TEST(rbcagentfullchessinfo_test, FENReconstruction_test);
+    FRIEND_TEST(rbcagentfullchessinfo_test, FENSplitting_test);
 };
 }
 

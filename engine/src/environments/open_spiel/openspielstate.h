@@ -130,7 +130,8 @@ public:
     std::vector<Action> legal_actions() const;
     void set(const std::string &fenStr, bool isChess960, int variant);
     void get_state_planes(bool normalize, float *inputPlanes, Version version) const;
-    std::string get_state_string() const;
+    void get_state_planes(bool normalize, std::vector<float>& statePlanes, Version version, open_spiel::chess::Color observer, open_spiel::chess::Color observedTarget) const;
+    std::string get_state_string(open_spiel::chess::Color observer, open_spiel::chess::Color observedTarget) const;
     unsigned int steps_from_null() const;
     bool is_chess960() const;
     std::string fen() const;

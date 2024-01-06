@@ -69,18 +69,73 @@ void OpenSpielState::set(const std::string &fenStr, bool isChess960, int variant
     spielState = spielGame->NewInitialState(fenStr);
 }
 
-void OpenSpielState::get_state_planes(bool normalize, float *inputPlanes, Version version) const
+void OpenSpielState::get_state_planes
+(
+    bool normalize,
+    std::vector<float>& statePlanes,
+    Version version,
+    open_spiel::chess::Color observer,
+    open_spiel::chess::Color observedTarget
+) const
+{
+    int observerInt = open_spiel::chess::ColorToPlayer(observer);
+    std::vector<float> v(spielGame->ObservationTensorSize());
+    spielState->ObservationTensor(observerInt, absl::MakeSpan(v));
+    statePlanes.resize(spielGame->ObservationTensorSize());
+    std::memcpy(statePlanes.data(),v.data(),statePlanes.size()*sizeof(float));
+}
+
+void OpenSpielState::get_state_planes
+(
+    bool normalize,
+    float *inputPlanes,
+    Version version
+) const
 {
     //std::fill(inputPlanes, inputPlanes+StateConstantsOpenSpiel::NB_VALUES_TOTAL(), 0.0f);
     // TODO fix the double free error
     std::vector<float> v(spielGame->ObservationTensorSize());
     spielState->ObservationTensor(spielState->CurrentPlayer(), absl::MakeSpan(v));
     std::copy( v.begin(), v.end(), inputPlanes);
+
+    /*    
+    int offset=0;
+    std::cout<<"Observation v Tensor"<<std::endl;
+    for(int k=0; k<52; k++) // max 52
+    {
+        std::cout<<"inputPlanes offset:"<<offset<<std::endl;
+        std::string observationStr;
+        observationStr=observationStr+"    a  b  c  d  e  f  g  h \n";
+        observationStr=observationStr+"    ---------------------- \n";
+        for(int8_t rank=7;rank>=0;rank--)
+        {
+        observationStr=observationStr+std::to_string(rank+1)+" |";
+        for(int8_t file=0;file<8;file++)
+        {
+            const size_t index = open_spiel::chess::SquareToIndex(open_spiel::chess::Square{file, rank}, 8);
+            observationStr = observationStr + " " + std::to_string((bool)inputPlanes[offset+index]) + " ";
+        }
+        observationStr=observationStr+"\n";
+        }
+        observationStr=observationStr+"\n";
+        std::cout<<observationStr<<std::endl;
+        
+        offset+=64;
+    }
+    */
 }
 
-std::string OpenSpielState::get_state_string() const
+std::string OpenSpielState::get_state_string
+(
+    open_spiel::chess::Color observer,
+    open_spiel::chess::Color observedTarget
+) const
 {
-    return spielState->ObservationString(spielState->CurrentPlayer());
+    int observerInt = open_spiel::chess::ColorToPlayer(observer);
+    //std::cout<<"Observation of RBC player:"<<spielState->CurrentPlayer()<<std::endl;
+    std::string obsString = spielState->ObservationString(observerInt);
+    //std::cout<<"obsString:"<<obsString<<std::endl;
+    return obsString;
 }
 
 unsigned int OpenSpielState::steps_from_null() const

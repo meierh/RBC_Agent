@@ -528,6 +528,20 @@ column(column),
 row(row)
 {}
 
+ChessInformationSet::Square::Square
+(
+    std::uint8_t column,
+    std::uint8_t row
+)
+{
+    if(column<0 || column>=8)
+        std::logic_error("Column integer out of bounds");
+    this->column = static_cast<ChessInformationSet::ChessColumn>(column);
+    if(row<0 || row>=8)
+        std::logic_error("Row integer out of bounds");
+    this->row = static_cast<ChessInformationSet::ChessRow>(row);    
+}
+
 ChessInformationSet::Square::Square(const open_spiel::chess_common::Square& os_sq)
 {
     if(os_sq.x<0 || os_sq.x>=8 || os_sq.y<0 || os_sq.y>=8)

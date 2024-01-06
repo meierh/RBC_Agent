@@ -44,8 +44,10 @@ public:
         NeuralNetAPI* netSingle,
         vector<unique_ptr<NeuralNetAPI>>& netBatches,
         SearchSettings* searchSettings,
-        PlaySettings* playSettings
-    ):RBCAgent(netSingle,netBatches,searchSettings,playSettings){}
+        PlaySettings* playSettings,
+        std::string fen,
+        PieceColor selfColor
+    ):RBCAgent(netSingle,netBatches,searchSettings,playSettings,fen,selfColor){}
 
     MaxEntropySenseAgent(const MaxEntropySenseAgent&) = delete;
     MaxEntropySenseAgent& operator=(MaxEntropySenseAgent const&) = delete;

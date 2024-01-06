@@ -61,6 +61,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 ChessRow row;
                 Square();
                 Square(ChessInformationSet::ChessColumn column,ChessInformationSet::ChessRow row);
+                Square(std::uint8_t column,std::uint8_t row);
                 Square(const open_spiel::chess_common::Square& os_sq);
                 bool operator==(const Square& other) const
                 {
@@ -112,7 +113,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         };
         enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
                           rook1=8,knight1=9,bishop1=10,queen=11,king=12,bishop2=13,knight2=14,rook2=15};
-        enum class PieceType : std::uint8_t {pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5,empty=6};
+        enum class PieceType : std::uint8_t {pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5,empty=6,unknown=7};
         static PieceType OpenSpielPieceType_to_CISPieceType(const open_spiel::chess::PieceType os_pT);
         static open_spiel::chess::PieceType CISPieceType_to_OpenSpielPieceType(const PieceType cis_pT);
 

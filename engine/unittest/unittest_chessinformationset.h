@@ -1,8 +1,10 @@
 #include <iostream>
 #include "chessinformationset.h"
 
-namespace crazyara {
+auto os_SquareToIndex = open_spiel::chess::SquareToIndex;
+using os_Square = open_spiel::chess::Square;
 
+namespace crazyara {
 TEST(chessinformationsetsquare_test, constructorAndEqual_test)
 {
     using CIS = ChessInformationSet;
@@ -87,6 +89,34 @@ TEST(chessinformationsetsquare_test, validSquare_test)
     EXPECT_EQ(sq.validSquare(1,9),false);
     EXPECT_EQ(sq.validSquare(1,8),false);
     EXPECT_EQ(sq.validSquare(0,7),true);
+}
+
+TEST(chessinformationsetsquare_test, boardAndIndex_test)
+{
+    using CIS = ChessInformationSet;
+    CIS::Square sq1(CIS::ChessColumn::B,CIS::ChessRow::three);
+    CIS::Square sq2(CIS::ChessColumn::A,CIS::ChessRow::seven);
+    CIS::Square sq3(CIS::ChessColumn::E,CIS::ChessRow::one);
+    CIS::Square sq4(CIS::ChessColumn::H,CIS::ChessRow::six);
+    CIS::Square sq5(CIS::ChessColumn::B,CIS::ChessRow::seven);
+    
+    EXPECT_EQ(CIS::boardIndexToSquare(CIS::squareToBoardIndex(sq1)),sq1);
+    EXPECT_EQ(CIS::boardIndexToSquare(CIS::squareToBoardIndex(sq2)),sq2);
+    EXPECT_EQ(CIS::boardIndexToSquare(CIS::squareToBoardIndex(sq3)),sq3);
+    EXPECT_EQ(CIS::boardIndexToSquare(CIS::squareToBoardIndex(sq4)),sq4);
+    EXPECT_EQ(CIS::boardIndexToSquare(CIS::squareToBoardIndex(sq5)),sq5);
+    
+    EXPECT_EQ(CIS::squareToBoardIndex(sq1),os_SquareToIndex(os_Square{1,2}, 8));
+    EXPECT_EQ(CIS::squareToBoardIndex(sq2),os_SquareToIndex(os_Square{0,6}, 8));
+    EXPECT_EQ(CIS::squareToBoardIndex(sq3),os_SquareToIndex(os_Square{4,0}, 8));
+    EXPECT_EQ(CIS::squareToBoardIndex(sq4),os_SquareToIndex(os_Square{7,5}, 8));
+    EXPECT_EQ(CIS::squareToBoardIndex(sq5),os_SquareToIndex(os_Square{1,6}, 8));
+    
+    EXPECT_EQ(CIS::squareToBoardIndex(sq1),17);
+    EXPECT_EQ(CIS::squareToBoardIndex(sq2),48);
+    EXPECT_EQ(CIS::squareToBoardIndex(sq3),4);
+    EXPECT_EQ(CIS::squareToBoardIndex(sq4),47);
+    EXPECT_EQ(CIS::squareToBoardIndex(sq5),49);
 }
 
 TEST(chessinformationsetoneplayerinfo_test, lambdafunctions_test)
