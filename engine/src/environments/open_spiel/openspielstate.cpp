@@ -45,6 +45,12 @@ OpenSpielState::OpenSpielState(const OpenSpielState &openSpielState):
 {
 }
 
+std::vector<Action> OpenSpielState::legal_actions(open_spiel::chess::Color actor) const
+{
+    int actorInt = open_spiel::chess::ColorToPlayer(actor);
+    return spielState->LegalActions(actorInt);
+}
+
 std::vector<Action> OpenSpielState::legal_actions() const
 {
     return spielState->LegalActions(spielState->CurrentPlayer());
@@ -274,18 +280,101 @@ void OpenSpielState::init(int variant, bool isChess960) {
     spielState->ApplyAction(1);  // dummy sense action
 }
 
-open_spiel::chess::Move OpenSpielState::ActionToMove(Action action) const
+std::string OpenSpielState::ActionToMoveString(Action action, open_spiel::chess::Color actor)
 {
-    std::unique_ptr<open_spiel::rbc::RbcState> rbcState;
-    open_spiel::State* spielStatePtr = spielState.get();
-    open_spiel::rbc::RbcState* rbcStatePtr;
-    try{
-        rbcStatePtr = dynamic_cast<open_spiel::rbc::RbcState*>(spielStatePtr);
-    }
-    catch(std::bad_cast& e)
-    {
-        throw std::logic_error("SpielState is not of RbcState type! Cast failed");
-    }
-    open_spiel::chess::Move move = open_spiel::chess::ActionToMove(action, rbcStatePtr->Board());
-    return move;
+    int actorInt = open_spiel::chess::ColorToPlayer(actor);
+    std::string moveString = spielState->ActionToString(actorInt,action);        
+    return moveString;
 }
+
+std::pair<std::uint8_t,open_spiel::chess::Move> OpenSpielState::ActionToIncompleteMove(Action action, open_spiel::chess::Color actor)
+{
+    auto result = std::pair<std::uint8_t,open_spiel::chess::Move>();
+    open_spiel::chess::Move& move = result.second;
+    std::uint8_t& phase = result.first;
+    
+    std::string moveString = ActionToMoveString(action,actor);
+    std::string from, to, promotionType;
+    auto stringToSquare = [](std::string squareString)
+    {
+        if(squareString.size()!=2)
+            throw std::logic_error("Invalid square string received");
+        char col = squareString[0];
+        int8_t colInt = col-'a';
+        char row = squareString[1];
+        int8_t rowInt = row-'1';
+        if(colInt<0 || colInt>=8 || rowInt<0 || rowInt>=8)
+            throw std::logic_error("Square string contains invalid characters");
+        return open_spiel::chess::Square{colInt,rowInt};
+    };
+    auto stringToPieceType = [](std::string pieceString)
+    {
+        if(pieceString.size()!=1)
+            throw std::logic_error("Invalid piece string received");
+        switch (pieceString[0])
+        {
+            case 'p':
+                return open_spiel::chess::PieceType::kPawn;
+            case 'n':
+                return open_spiel::chess::PieceType::kKnight;
+            case 'b':
+                return open_spiel::chess::PieceType::kBishop;
+            case 'r':
+                return open_spiel::chess::PieceType::kRook;
+            case 'q':
+                return open_spiel::chess::PieceType::kQueen;
+            case 'k':
+                return open_spiel::chess::PieceType::kKing;
+            case ' ':
+                return open_spiel::chess::PieceType::kEmpty;
+            default:
+                throw std::logic_error("Invalid character in piece string");
+        }
+    };
+    
+    try
+    {
+        if(moveString.size()==8)
+        {
+            phase = 0;
+            from = moveString.substr(6,2);
+            move.from = stringToSquare(from);
+        }
+        if(moveString.size()==4 || moveString.size()==5)
+        {
+            phase = 1;
+            from = moveString.substr(0,2);
+            to = moveString.substr(2,2);
+            move.from = stringToSquare(from);
+            move.to = stringToSquare(to);
+            move.promotion_type = open_spiel::chess::PieceType::kEmpty;
+            if(moveString.size()==5)
+            {
+                promotionType = moveString.substr(4,1);
+                move.promotion_type = stringToPieceType(promotionType);
+            }
+        }
+        else
+            throw std::logic_error("Invalid LAN string received");
+    }
+    catch(std::logic_error e)
+    {
+        std::cout<<e.what()<<std::endl;
+        throw std::logic_error("Problem: "+moveString);
+    }     
+    return result;
+}
+
+open_spiel::chess::Color OpenSpielState::currentPlayer()
+{
+    return open_spiel::chess::PlayerToColor(spielState->CurrentPlayer());
+}
+
+open_spiel::rbc::MovePhase OpenSpielState::currentPhase() const
+{
+    open_spiel::rbc::RbcState* rbcState = dynamic_cast<open_spiel::rbc::RbcState*>(spielState.get());
+    if(rbcState==nullptr)
+        throw std::logic_error("Can not cast state to RbcState");
+    return rbcState->phase();
+}
+

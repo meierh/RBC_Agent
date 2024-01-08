@@ -47,9 +47,13 @@ public:
     
 private:   
     enum Player {Self, Opponent};
-    enum MovePhase {sense=0,move=1};
+    enum MovePhase : std::uint8_t {Sense=0,Move=1};
+    
     static open_spiel::chess::Color AgentColor_to_OpenSpielColor(const PieceColor agent_pC);
     static PieceColor OpenSpielColor_to_RBCColor(const open_spiel::chess::Color os_pC);
+    
+    static open_spiel::rbc::MovePhase AgentPhase_to_OpenSpielPhase(const MovePhase agent_pC);
+    static MovePhase OpenSpielPhase_to_RBCPhase(const open_spiel::rbc::MovePhase os_pC);
     
     class FullChessInfo
     {
@@ -81,18 +85,21 @@ private:
             
             static std::array<std::pair<CIS::PieceType,PieceColor>,64> decodeFENFigurePlacement(std::string);
             
-            static void splitFEN(std::string fen, std::vector<std::string>& fenParts);
+            static void splitFEN(std::string fen, std::vector<std::string>& fenParts);            
     };
 
     CIS::OnePlayerChessInfo playerPiecesTracker;
     PieceColor selfColor;
+    PieceColor opponentColor;
     unsigned int currentTurn;
     
     EvalInfo* evalInfo = nullptr;
-    StateObj* chessOpenSpiel;
+    StateObj* rbcState;
+    StateObj* chessState;
     
     void splitObsFEN(std::string obsFen,std::vector<std::string>& obsFenParts) const;
-
+    void completeMoveData(open_spiel::chess::Move& move,CIS::OnePlayerChessInfo& opponentInfo) const;
+    
 protected:
     std::random_device rd;
     std::mt19937 gen;
@@ -246,6 +253,7 @@ private:
     FRIEND_TEST(rbcagentfullchessinfo_test, FEN_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, FENReconstruction_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, FENSplitting_test);
+    FRIEND_TEST(rbcagentfullchessinfo_test, Observation_test);
 };
 }
 

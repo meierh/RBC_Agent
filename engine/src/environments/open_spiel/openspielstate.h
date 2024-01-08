@@ -127,6 +127,7 @@ public:
 
     // State interface
 public:
+    std::vector<Action> legal_actions(open_spiel::chess::Color actor) const;
     std::vector<Action> legal_actions() const;
     void set(const std::string &fenStr, bool isChess960, int variant);
     void get_state_planes(bool normalize, float *inputPlanes, Version version) const;
@@ -152,7 +153,10 @@ public:
     OpenSpielState *clone() const;
     void init(int variant, bool isChess960);
     
-    open_spiel::chess::Move ActionToMove(Action action) const;
+    std::string ActionToMoveString(Action action, open_spiel::chess::Color actor);
+    std::pair<std::uint8_t,open_spiel::chess::Move> ActionToIncompleteMove(Action action, open_spiel::chess::Color actor);
+    open_spiel::chess::Color currentPlayer();
+    open_spiel::rbc::MovePhase currentPhase() const;
 };
 
 #endif // OPENSPIELSTATE_H

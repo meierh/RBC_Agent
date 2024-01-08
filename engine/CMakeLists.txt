@@ -560,7 +560,7 @@ target_link_libraries(unittests ${MAIN_LINKED})
 
 #message(STATUS "Find linked libraries of unittest:")
 #get_target_property(UNIT_LINKED unittests LINK_LIBRARIES)
-#message(STATUS ${UNIT_LINKED})
+message(STATUS ${UNIT_LINKED})
 #message(STATUS "--------------------")
 
 gtest_discover_tests(unittests)

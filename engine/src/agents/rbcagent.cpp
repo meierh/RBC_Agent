@@ -56,11 +56,13 @@ currentTurn(1)
     {
         playerPiecesTracker = initialGameState.white;
         cis->add(initialGameState.black,1.0);
+        opponentColor = PieceColor::black;
     }
     else
     {
         playerPiecesTracker = initialGameState.black;
         cis->add(initialGameState.white,1.0);
+        opponentColor = PieceColor::white;
     }
 }
 
@@ -127,10 +129,10 @@ RBCAgent::FullChessInfo::FullChessInfo(std::string fen)
     this->white.queenside=false;
     this->black.kingside=false;
     this->black.queenside=false;
-    std::cout<<"castlingString:"<<castlingString<<std::endl;
+    //std::cout<<"castlingString:"<<castlingString<<std::endl;
     for(char c : castlingString)
     {
-        std::cout<<" "<<c<<std::endl;
+        //std::cout<<" "<<c<<std::endl;
         switch (c)
         {
             case 'K':
@@ -174,10 +176,15 @@ RBCAgent::FullChessInfo::FullChessInfo(std::string fen)
     
     this->nextCompleteTurn = std::stoi(fullMoveNumberString);
     
+    /*
     std::cout<<"this->black.kingside:"<<this->black.kingside<<std::endl;
     std::cout<<"this->black.queenside:"<<this->black.queenside<<std::endl;
     std::cout<<"this->white.kingside:"<<this->white.kingside<<std::endl;
     std::cout<<"this->white.queenside:"<<this->white.queenside<<std::endl;
+    
+    std::cout<<"this->white:"<<this->white.to_string()<<std::endl;
+    std::cout<<"this->black:"<<this->black.to_string()<<std::endl;
+    */
 }
 
 open_spiel::chess::Color RBCAgent::AgentColor_to_OpenSpielColor
@@ -224,7 +231,46 @@ RBCAgent::PieceColor RBCAgent::OpenSpielColor_to_RBCColor
             throw std::logic_error("Conversion failure from open_spiel::chess::Color to RBCAgent::PieceColor!");
     }
     return result;
-    
+}
+
+open_spiel::rbc::MovePhase RBCAgent::AgentPhase_to_OpenSpielPhase
+(
+    const RBCAgent::MovePhase agent_mP
+)
+{
+    open_spiel::rbc::MovePhase result;
+    switch(agent_mP)
+    {
+        case MovePhase::Sense:
+            result = open_spiel::rbc::MovePhase::kSensing;
+            break;        
+        case MovePhase::Move:
+            result = open_spiel::rbc::MovePhase::kMoving;
+            break;
+        default:
+            throw std::logic_error("Conversion failure from RBCAgent::MovePhase to open_spiel::rbc::MovePhase!");
+    }
+    return result;
+}
+
+RBCAgent::MovePhase RBCAgent::OpenSpielPhase_to_RBCPhase
+(
+    const open_spiel::rbc::MovePhase os_mP
+)
+{
+    RBCAgent::MovePhase result;
+    switch(os_mP)
+    {
+        case open_spiel::rbc::MovePhase::kSensing:
+            result = MovePhase::Sense;
+            break;        
+        case open_spiel::rbc::MovePhase::kMoving:
+            result = MovePhase::Move;
+            break;
+        default:
+            throw std::logic_error("Conversion failure from RBCAgent::MovePhase to open_spiel::rbc::MovePhase!");
+    }
+    return result;
 }
 
 std::pair<std::array<std::uint8_t,9>,std::array<RBCAgent::CIS::Square,9>> RBCAgent::getSensingBoardIndexes(RBCAgent::CIS::Square sq)
@@ -271,7 +317,6 @@ std::pair<std::array<std::uint8_t,9>,std::array<RBCAgent::CIS::Square,9>> RBCAge
         throw std::logic_error("Invalid sensing area");
     return result;    
 }
-
 
 std::string RBCAgent::FullChessInfo::getFEN
 (
@@ -471,47 +516,167 @@ void RBCAgent::FullChessInfo::splitFEN
     fenParts[0] = fen;
 }
 
+void RBCAgent::splitObsFEN
+(
+    std::string obsFen,
+    std::vector<std::string>& obsFenParts
+) const
+{
+    using CIS = ChessInformationSet;
+    obsFenParts.resize(6);
+    
+    // Full Move
+    //std::cout<<"|"<<fen<<"|"<<std::endl;
+    if(obsFen.back()==' ')
+        throw std::invalid_argument("Invalid obsFen string ending 6");
+    uint index = obsFen.rfind(' ');
+    obsFenParts[5] = obsFen.substr(index+1,obsFen.size()-index);
+    obsFen = obsFen.substr(0,index);
+    if(obsFenParts[5].size()!=1)
+        throw std::invalid_argument("Invalid illegal move string");
+    if(obsFenParts[5].find(' ')!=std::string::npos)
+        throw std::invalid_argument("Invalid illegal move string character");
+    
+    //Half move
+    //std::cout<<"|"<<obsFen<<"|"<<std::endl;
+    if(obsFen.back()==' ')
+        throw std::invalid_argument("Invalid obsFen string ending 5");
+    index = obsFen.rfind(' ');
+    obsFenParts[4] = obsFen.substr(index+1,obsFen.size()-index);
+    obsFen = obsFen.substr(0,index);
+    if(obsFenParts[4].size()!=1)
+        throw std::invalid_argument("Invalid side to play string");
+    if(obsFenParts[4].find(' ')!=std::string::npos)
+        throw std::invalid_argument("Invalid side to play string character");
+    
+    //En_passant
+    //std::cout<<"|"<<obsFen<<"|"<<std::endl;
+    if(obsFen.back()==' ')
+        throw std::invalid_argument("Invalid obsFen string ending 4");
+    index = obsFen.rfind(' ');
+    obsFenParts[3] = obsFen.substr(index+1,obsFen.size()-index);
+    obsFen = obsFen.substr(0,index);
+    if(obsFenParts[3].size()!=1)
+        throw std::invalid_argument("Invalid capture string");
+    if(obsFenParts[3].find(' ')!=std::string::npos)
+        throw std::invalid_argument("Invalid capture string character");
+    
+    //Castling
+    //std::cout<<"|"<<obsFen<<"|"<<std::endl;
+    if(obsFen.back()==' ')
+        throw std::invalid_argument("Invalid obsFen string ending 3");
+    index = obsFen.rfind(' ');
+    obsFenParts[2] = obsFen.substr(index+1,obsFen.size()-index);
+    obsFen = obsFen.substr(0,index);
+    if(obsFenParts[2].size()!=1)
+        throw std::invalid_argument("Invalid phase string");
+    if(obsFenParts[2].find(' ')!=std::string::npos)
+        throw std::invalid_argument("Invalid phase string character");
+    
+    //Active player
+    //std::cout<<"|"<<obsFen<<"|"<<std::endl;
+    if(obsFen.back()==' ')
+        throw std::invalid_argument("Invalid obsFen string ending 2");
+    index = obsFen.rfind(' ');
+    obsFenParts[1] = obsFen.substr(index+1,obsFen.size()-index);
+    obsFen = obsFen.substr(0,index);
+    if(obsFenParts[2].size()>2 || obsFenParts[2].size()<1)
+        throw std::invalid_argument("Invalid castling string");
+    if(obsFenParts[2].find(' ')!=std::string::npos)
+        throw std::invalid_argument("Invalid castling string character");
+    
+    //Piece placement
+    //std::cout<<"|"<<obsFen<<"|"<<std::endl;
+    if(obsFen.back()==' ')
+        throw std::invalid_argument("Invalid obsFen string ending 1");
+    obsFenParts[0] = obsFen;
+}
 
 void RBCAgent::set_search_settings
 (
-    StateObj *pos,
+    StateObj *rbcState,
     SearchLimits *searchLimits,
     EvalInfo* evalInfo
 )
 {
+    this->rbcState = rbcState;
+    
     //Reduce hypotheses using the previous move information
     if(!(currentTurn==1 && selfColor==PieceColor::white))
     {
         std::cout<<"Move information"<<std::endl;
-        handleOpponentMoveInfo(pos);
+        handleOpponentMoveInfo(rbcState);
         stepForwardHypotheses();
     }
     
     //Scan the board an reduce hypotheses
     std::cout<<"Scan information"<<std::endl;
-    ChessInformationSet::Square scanCenter = applyScanAction(pos);
-    handleScanInfo(pos,scanCenter);
+    ChessInformationSet::Square scanCenter = applyScanAction(rbcState);
+    handleScanInfo(rbcState,scanCenter);
         
     // setup MCTS search
     std::cout<<"MCTS setup"<<std::endl;
     this->evalInfo = evalInfo;
-    StateObj* chessOpenSpiel = setupMoveSearchState();
-    MCTSAgent::set_search_settings(chessOpenSpiel,searchLimits,evalInfo);
+    StateObj* chessState = setupMoveSearchState();
+    MCTSAgent::set_search_settings(chessState,searchLimits,evalInfo);
 }
 
 void RBCAgent::perform_action()
 {
     // Run mcts tree and set action to game
     std::cout<<"Search action"<<std::endl;
-    throw std::runtime_error("Temp Stop");
+    //throw std::runtime_error("Temp Stop");
     MCTSAgent::perform_action();
+    delete this->state;
+    
+    evalInfo->bestMove = 1258;
     
     //Reduce hypotheses using the own move information
-    std::cout<<"Handle action move information"<<std::endl;
-    state->do_action(evalInfo->bestMove);
-    handleSelfMoveInfo(state);
-    state->undo_action(evalInfo->bestMove);
-    delete chessOpenSpiel;
+    std::cout<<"perform_action -- Handle action move information"<<std::endl;
+    handleSelfMoveInfo(rbcState);
+}
+
+void RBCAgent::completeMoveData
+(
+    open_spiel::chess::Move& move,
+    ChessInformationSet::OnePlayerChessInfo& opponentInfo
+) const
+{
+    using CIS = ChessInformationSet;
+    std::function<std::pair<bool,CIS::PieceType>(const ChessInformationSet::Square&)> opponentSquareToPiece = opponentInfo.getSquarePieceTypeCheck();
+    
+    CIS::Square from(move.from);
+    CIS::Square to(move.to);
+    auto [nonEmpty,piece] = opponentSquareToPiece(from);
+    if(!nonEmpty)
+    {
+        throw std::logic_error("Move from empty square not possible");
+    }
+    if(piece==CIS::PieceType::empty || piece==CIS::PieceType::unknown)
+    {
+        throw std::logic_error("Move from square with empty or unknown type");
+    }
+    open_spiel::chess::Piece movedPiece
+    {
+        AgentColor_to_OpenSpielColor(opponentColor),
+        CIS::CISPieceType_to_OpenSpielPieceType(piece)
+    };
+    move.piece = movedPiece;
+    
+    if(piece==CIS::PieceType::king)
+    {
+        std::pair<std::int8_t,std::int8_t> diffFromTo = from.diffToSquare(to);
+        if(diffFromTo.first==1 || diffFromTo.second==1)
+        {
+            move.is_castling = false;
+        }
+        else if(diffFromTo.first==2)
+        {
+            move.is_castling = true;
+        }
+        else
+            throw std::logic_error("King can not move three or more squares");
+    }
 }
 
 std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> RBCAgent::generateHypotheses
@@ -529,7 +694,6 @@ std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,do
     auto hypotheses = std::make_unique<std::vector<std::pair<CIS_CPI,double>>>();
     
     FullChessInfo fullState;
-    PieceColor opponentColor;
     unsigned int nextCompleteTurn;
     
     // switch positions to get all legal actions
@@ -550,11 +714,19 @@ std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,do
     std::string fen = fullState.getFEN();
     OpenSpielState hypotheticState(open_spiel::gametype::SupportedOpenSpielVariants::RBC);
     hypotheticState.set(fen,false,open_spiel::gametype::SupportedOpenSpielVariants::RBC);
+    open_spiel::chess::Color os_opponent = AgentColor_to_OpenSpielColor(opponentColor);
     std::vector<Action> legal_actions_int = hypotheticState.legal_actions();
     std::vector<open_spiel::chess::Move> legal_actions_move(legal_actions_int.size());
     for(unsigned int actionInd=0; actionInd<legal_actions_int.size(); actionInd++)
     {
-        legal_actions_move[actionInd] = hypotheticState.ActionToMove(legal_actions_int[actionInd]);
+        std::pair<std::uint8_t,open_spiel::chess::Move> move = hypotheticState.ActionToIncompleteMove(legal_actions_int[actionInd],os_opponent);
+        MovePhase actionPhaseType = static_cast<MovePhase>(move.first);
+        if(actionPhaseType == MovePhase::Sense)
+        {
+            throw std::logic_error("Invalid phase action");
+        }
+        completeMoveData(move.second,piecesOpponent);
+        legal_actions_move[actionInd] = move.second;
     }
     for(const open_spiel::chess::Move& move : legal_actions_move)
     {
@@ -825,11 +997,11 @@ std::array<std::pair<ChessInformationSet::PieceType,RBCAgent::PieceColor>,64> RB
                 if(c>=97)
                 {
                     c -= 32;
-                    thisPieceColor = PieceColor::white;
+                    thisPieceColor = PieceColor::black;
                 }
                 else
                 {
-                    thisPieceColor = PieceColor::black;
+                    thisPieceColor = PieceColor::white;
                 }
                 
                 CIS::PieceType thisPieceType;
@@ -861,7 +1033,7 @@ std::array<std::pair<ChessInformationSet::PieceType,RBCAgent::PieceColor>,64> RB
             }
             //std::cout<<c<<" "<<std::endl;
         }
-        std::cout<<strPart<<":|"<<oneRowPieces<<"| -- "<<colInt<<std::endl;;
+        //std::cout<<strPart<<":|"<<oneRowPieces<<"| -- "<<colInt<<std::endl;;
         if(colInt!=8)
         {
             throw std::logic_error("Sum of one row does not match the required 8");
@@ -883,13 +1055,14 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
     open_spiel::chess::Color os_observer = AgentColor_to_OpenSpielColor(observer);
     open_spiel::chess::Color os_observationTarget = AgentColor_to_OpenSpielColor(observationTarget);
     
+    std::cout<<"Decode state via state string"<<std::endl;
     /*
      * Decode state via state string
      */
     std::string observationString = pos->get_state_string(os_observer,os_observationTarget);
     //uint observationStringLen = observationString.size();
     std::vector<std::string> observationStringParts;
-    FullChessInfo::splitFEN(observationString,observationStringParts);
+    splitObsFEN(observationString,observationStringParts);
     std::string figurePlacementString = observationStringParts[0];
     std::string castlingString = observationStringParts[1];
     std::string phaseString = observationStringParts[2];
@@ -947,7 +1120,7 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
         return pieceTypeName==referencePieceTypeName;
     };
     
-    
+    std::cout<<"Decode state via state tensor"<<std::endl;
     /*
      * Decode state via state tensor
      */
@@ -992,9 +1165,9 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
     
     MovePhase currentPhase;
     if(phaseString=="s")
-        currentPhase = MovePhase::sense;
+        currentPhase = MovePhase::Sense;
     else if(phaseString=="m")
-        currentPhase = MovePhase::move;
+        currentPhase = MovePhase::Move;
     else
         throw std::logic_error("Illegal phase string: Must be (s,m)");
     info->currentPhase = currentPhase;
@@ -1030,7 +1203,6 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
     std::vector<std::string> colorName = {"white","black"};
     for(std::uint16_t color=0; color<obs.size(); color++)
     {
-        
         pieceReader(obs[color]->kings,1,colorName[color]+" kings");
         pieceReader(obs[color]->queens,9,colorName[color]+" queens");
         pieceReader(obs[color]->rooks,10,colorName[color]+" rooks");
@@ -1358,24 +1530,44 @@ void RBCAgent::handleOpponentMoveInfo
 
 void RBCAgent::handleSelfMoveInfo
 (
-    StateObj *pos
+    StateObj* rbcState
 )
 {
     using CIS = ChessInformationSet;
     
-    std::unique_ptr<FullChessInfo> observation = decodeObservation(pos,selfColor,selfColor);
+    if(OpenSpielColor_to_RBCColor(rbcState->currentPlayer()) != selfColor)
+        throw std::logic_error("RBC game state is in the wrong current player status");
+    if(OpenSpielPhase_to_RBCPhase(rbcState->currentPhase()) != MovePhase::Move)
+        throw std::logic_error("RBC game state is in the wrong current phase");
+    
+// Decode action
+    Action selfLastAction = this->evalInfo->bestMove;
+    std::cout<<"Player "<<selfColor<<" handles own move information of "<<selfLastAction<<std::endl;
+    open_spiel::chess::Color os_self = AgentColor_to_OpenSpielColor(selfColor);
+    std::pair<std::uint8_t,open_spiel::chess::Move> move = rbcState->ActionToIncompleteMove(selfLastAction,os_self);
+    MovePhase actionPhaseType = static_cast<MovePhase>(move.first);
+    if(actionPhaseType == MovePhase::Sense)
+    {
+        throw std::logic_error("Invalid phase action");
+    }
+    completeMoveData(move.second,playerPiecesTracker);
+    open_spiel::chess::Move& selfLastMove = move.second;
+    std::cout<<"selfLastMove:"<<selfLastMove<<std::endl;
+        
+//Apply action to state
+    rbcState->do_action(evalInfo->bestMove);
+    std::cout<<"Action applied"<<std::endl;
 
+//Decode an evaluate after action status and infer information from that
+    std::unique_ptr<FullChessInfo> observation = decodeObservation(rbcState,selfColor,selfColor);
     if(observation->nextTurn==selfColor || selfColor==PieceColor::empty)
         throw std::logic_error("Wrong turn marker");
-    if(observation->currentPhase!=MovePhase::sense)
+    if(observation->currentPhase!=MovePhase::Sense)
         throw std::logic_error("Wrong move phase marker:"+std::to_string(observation->currentPhase));
             
     CIS::OnePlayerChessInfo& selfObs = (selfColor==white)?observation->white:observation->black;
     std::function<std::pair<bool,CIS::PieceType>(const CIS::Square&)> squareToPiece;
     squareToPiece = selfObs.getSquarePieceTypeCheck();
-    
-    Action selfLastAction = this->evalInfo->bestMove;
-    open_spiel::chess::Move selfLastMove = pos->ActionToMove(selfLastAction);
     
     //Test for castling
     bool castling = selfLastMove.is_castling;
@@ -1386,11 +1578,17 @@ void RBCAgent::handleSelfMoveInfo
 
     // Find moved piece and determine the squares
     CIS::Square fromSquare = CIS::Square(selfLastMove.from);
+    std::cout<<"fromSquare:"<<fromSquare.to_string()<<std::endl;
     CIS::Square toSquareAim = CIS::Square(selfLastMove.to);
+    std::cout<<"toSquareAim:"<<toSquareAim.to_string()<<std::endl;
+    
+    std::cout<<"selfObs:"<<selfObs.to_string()<<std::endl;
+    
     std::pair<bool,CIS::PieceType> fromPiece = squareToPiece(fromSquare);
     if(!fromPiece.first)
         throw std::logic_error("Move from empty square");
     CIS::PieceType initialMovePiece = fromPiece.second;
+    std::cout<<"MovePiece:"<<(int)initialMovePiece<<std::endl;
 
     //Find toSquareReal
     CIS::Square toSquareReal;
@@ -1583,6 +1781,9 @@ void RBCAgent::handleSelfMoveInfo
         
     cis->markIncompatibleBoards(conditions);
     cis->removeIncompatibleBoards();
+
+//Undo action to state
+    rbcState->undo_action(evalInfo->bestMove);
 }
 
 void RBCAgent::handleScanInfo
@@ -1689,7 +1890,7 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
         fullInfoSet->white = selectedHypothese->first;
         fullInfoSet->nextTurn = PieceColor::black;
     }
-    fullInfoSet->currentPhase = MovePhase::move;
+    fullInfoSet->currentPhase = MovePhase::Move;
     fullInfoSet->lastMoveCapturedPiece = false;
     fullInfoSet->lastMoveIllegal = false;
     fullInfoSet->nextCompleteTurn = currentTurn;
@@ -1707,10 +1908,10 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
 
 StateObj* RBCAgent::setupMoveSearchState()
 {
-    chessOpenSpiel = new OpenSpielState(open_spiel::gametype::SupportedOpenSpielVariants::CHESS);
+    chessState = new OpenSpielState(open_spiel::gametype::SupportedOpenSpielVariants::CHESS);
     std::unique_ptr<FullChessInfo> searchState = selectHypothese();
-    chessOpenSpiel->set(searchState->getFEN(),false,open_spiel::gametype::SupportedOpenSpielVariants::CHESS);
-    return chessOpenSpiel;
+    chessState->set(searchState->getFEN(),false,open_spiel::gametype::SupportedOpenSpielVariants::CHESS);
+    return chessState;
 }
 
 ChessInformationSet::Square RBCAgent::applyScanAction

@@ -51,12 +51,20 @@ TensorrtAPI::TensorrtAPI(int deviceID, unsigned int batchSize, const string &mod
 {
     // select the requested device
     cudaSetDevice(deviceID);
+    //std::cout<<"deviceID:"<<deviceID<<std::endl;
     // in ONNX, the model architecture and parameters are in the same file
     modelName = get_onnx_model_name(modelDir, batchSize);
+    //std::cout<<"modelName:"<<modelName<<std::endl;
 
     modelFilePath = modelDir + modelName;
+    //std::cout<<"modelFilePath:"<<modelFilePath<<std::endl;
+
     info_string("onnx file:", modelFilePath);
     trtFilePath = generate_trt_file_path(modelDir, batchSize, precision, deviceID);
+    //std::cout<<"batchSize:"<<batchSize<<std::endl;
+    //std::cout<<"precision:"<<precision<<std::endl;
+    //std::cout<<"trtFilePath:"<<trtFilePath<<std::endl;
+    
     gLogger.setReportableSeverity(nvinfer1::ILogger::Severity::kERROR);
 
     initialize();
@@ -80,7 +88,9 @@ TensorrtAPI::~TensorrtAPI()
 void TensorrtAPI::load_model()
 {
     // load an engine from file or build an engine from the ONNX network
+    
     engine = shared_ptr<nvinfer1::ICudaEngine>(get_cuda_engine(), samplesCommon::InferDeleter());
+    //std::cout<<"TensorAPI model loaded"<<std::endl;
 }
 
 void TensorrtAPI::load_parameters()

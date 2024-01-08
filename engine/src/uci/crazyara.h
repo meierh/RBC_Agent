@@ -309,6 +309,8 @@ private:
      * @param state State object
      */
     void set_uci_option(istringstream &is, StateObj& state);
+    
+    FRIEND_TEST(rbcagentfullchessinfo_test, Observation_test);
 };
 
 /**
