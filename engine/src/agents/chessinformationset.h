@@ -323,10 +323,55 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     return oneTrue;
                 };
                 
+                std::string to_string() const
+                {
+                    std::string result = "( ";
+                    for(int i=0; i<literalNbr; i++)
+                    {
+                        result += boardPlaces[i].to_string();
+                        if(conditionBool[i])
+                            result+="==";
+                        else
+                            result+="!=";
+                        switch (boardPlaceTypes[i])
+                        {
+                            case PieceType::pawn:
+                                result+="pawn";
+                                break;
+                            case PieceType::knight:
+                                result+="knight";
+                                break;
+                            case PieceType::bishop:
+                                result+="bishop";
+                                break;
+                            case PieceType::rook:
+                                result+="rook";
+                                break;
+                            case PieceType::queen:
+                                result+="queen";
+                                break;
+                            case PieceType::king:
+                                result+="king";
+                                break;
+                            case PieceType::any:
+                                result+="any";
+                                break;
+                            case PieceType::none:
+                                result+="none";
+                                break;
+                        }
+                        if(i+1 < literalNbr)
+                            result+=" || ";
+                    }
+                    result+=" )";
+                    return result;
+                }
+                
                 FRIEND_TEST(chessinformationsetboardclause_test, constructor_test);
                 FRIEND_TEST(chessinformationsetboardclause_test, orOperator_test);
                 FRIEND_TEST(chessinformationsetboardclause_test, notOperator_test);
                 FRIEND_TEST(chessinformationsetboardclause_test, evalOperator_test);
+                FRIEND_TEST(chessinformationset_test, boardClause_test);
         };
         
         class Distribution
@@ -359,6 +404,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          * @param knownPieces
          */
         void markIncompatibleBoards(const std::vector<BoardClause>& conditions);
+        
+        bool evaluateHornClause(const std::vector<BoardClause>& hornClause, OnePlayerChessInfo& piecesInfo);
         
         void removeIncompatibleBoards();
         
@@ -459,6 +506,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         FRIEND_TEST(chessinformationsetsquare_test, validSquare_test);
         FRIEND_TEST(chessinformationset_test, encodeDecode_test);
         FRIEND_TEST(chessinformationset_test, addSetAndGetBoards_test);
+        FRIEND_TEST(chessinformationset_test, boardClause_test);
 };
 }
 #endif // INFORMATIONSET_H

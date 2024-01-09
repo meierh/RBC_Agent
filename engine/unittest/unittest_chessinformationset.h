@@ -1,5 +1,6 @@
 #include <iostream>
 #include "chessinformationset.h"
+#include "rbcagent.h"
 
 auto os_SquareToIndex = open_spiel::chess::SquareToIndex;
 using os_Square = open_spiel::chess::Square;
@@ -525,5 +526,59 @@ TEST(chessinformationset_test, constructor_test)
 {
     ChessInformationSet cis;
     EXPECT_EQ(cis.size(), 0);
+}
+
+TEST(chessinformationset_test, boardClause_test)
+{
+    using BC = ChessInformationSet::BoardClause;
+    using SQ = ChessInformationSet::Square;
+    using COL = ChessInformationSet::ChessColumn;
+    using ROW = ChessInformationSet::ChessRow;
+    using PT = ChessInformationSet::BoardClause::PieceType;
+    
+    std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    RBCAgent::FullChessInfo fci1(fen1);
+    BC clause11(SQ(COL::B,ROW::seven),PT::pawn);
+    EXPECT_TRUE(clause11(fci1.black));
+    clause11 = !clause11;
+    EXPECT_FALSE(clause11(fci1.black));
+    BC clause12(SQ(COL::B,ROW::eight),PT::knight);
+    clause11 = clause11 | clause12;
+    EXPECT_TRUE(clause11(fci1.black));
+    
+    std::string fen2 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
+    RBCAgent::FullChessInfo fci2(fen2);
+    
+    std::string fen3 = "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2";
+    RBCAgent::FullChessInfo fci3(fen3);
+    
+    std::string fen4 = "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
+    RBCAgent::FullChessInfo fci4(fen4);
+    
+    std::string fen5 = "6r1/6pp/7r/1B5K/1P3k2/N7/3R4/8 w - - 30 79";
+    RBCAgent::FullChessInfo fci5(fen5);
+    
+    std::string fen6 = "2k5/5P1K/3P2p1/3P2NP/p3PBp1/5B2/Q4n2/6r1 w - - 0 1";
+    RBCAgent::FullChessInfo fci6(fen6);
+
+    std::string fen7 = "5r2/p1Q3pb/5p1p/4PP2/6p1/8/pBR1Nk2/3K4 w - - 0 1";
+    RBCAgent::FullChessInfo fci7(fen7);
+    
+    std::string fen8 = "8/5pPn/kP2b3/P1PP1N2/5p1K/r1p5/P6p/8 w - - 0 1";
+    RBCAgent::FullChessInfo fci8(fen8);
+    
+    std::string fen9 = "3b2B1/4p3/k2p3K/2P1nq2/4bP2/6P1/2p1r1P1/7Q w - - 0 1";
+    RBCAgent::FullChessInfo fci9(fen9);
+    
+    std::string fen10 = "2r5/2P3p1/2Q1p3/1P1p3B/2P4K/3p4/p1NP1k2/q7 w - - 0 1";
+    RBCAgent::FullChessInfo fci10(fen10);
+    
+    std::string fen11 = "7N/8/8/8/5k2/8/1PK5/8 w - - 0 1";
+    RBCAgent::FullChessInfo fci11(fen11);
+    
+    std::string fen12 = "8/8/8/6k1/8/K7/8/8 w - - 0 1";
+    RBCAgent::FullChessInfo fci12(fen12);
+    
+    std::string fen13 = "2rn1b2/2pPNQ1P/K3Bpb1/2PPPpp1/np1kN1RP/p4p2/P1Pqp2R/2B4r w - - 0 1";
 }
 };

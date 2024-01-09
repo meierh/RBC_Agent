@@ -489,21 +489,33 @@ void ChessInformationSet::markIncompatibleBoards
     const std::vector<BoardClause>& conditions
 )
 {
+    std::cout<<"Mark boards that do not fit: ";
+    for(auto clause : conditions)
+        std::cout<<clause.to_string()<<"&&";
+    std::cout<<std::endl;
     std::unique_ptr<std::pair<OnePlayerChessInfo,double>> board;
     for(auto iter=begin(); iter!=end(); iter++)
     {
         board = *iter;
         OnePlayerChessInfo& piecesInfo = board->first;
         
-        bool incompatibleBoard = true;
-        for(const BoardClause& oneClause : conditions)
-        {
-            incompatibleBoard = incompatibleBoard && oneClause(piecesInfo);
-        }
-        
-        if(incompatibleBoard)
+        if(!evaluateHornClause(conditions,piecesInfo))
             incompatibleBoards.push(iter.getCurrentIndex());
     }
+}
+
+bool ChessInformationSet::evaluateHornClause
+(
+    const std::vector<BoardClause>& hornClause,
+    OnePlayerChessInfo& piecesInfo
+)
+{
+    bool value = true;
+    for(const BoardClause& oneClause : hornClause)
+    {
+        value = value && oneClause(piecesInfo);
+    }
+    return value;
 }
 
 void ChessInformationSet::removeIncompatibleBoards()

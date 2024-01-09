@@ -68,6 +68,11 @@ class InformationSet
         {
             return infoSetSize;            
         };
+        
+        std::uint64_t validSize() const
+        {
+            return infoSetSize-removedBoards.size();            
+        };
 
         void add(const std::bitset<numberBitsPerItem>& item)
         {
@@ -172,6 +177,7 @@ class InformationSet
         
         void remove(const std::uint64_t itemInd)
         {
+            std::cout<<"------------Item:"<<itemInd<<" removed"<<std::endl;
             removedBoards.insert(itemInd);
         };
         
@@ -535,7 +541,11 @@ class InformationSet
                 {
                     std::uint64_t startItem = 0;
                     while(is->removedBoards.find(startItem)!=is->removedBoards.end())
+                    {
+                        
                         startItem++;
+                    }
+                    std::cout<<"Create iterator:"<<startItem<<std::endl;
                     *this = IS_Iterator(is,startItem);
                 };
 
@@ -595,6 +605,7 @@ class InformationSet
 
                 std::unique_ptr<std::bitset<numberBitsPerItem>> operator*() const noexcept
                 {
+                    std::cout<<"Get Pattern:"<<current_Item<<std::endl;
                     return is->getBitPattern(current_Item);
                 };
                 
@@ -620,6 +631,7 @@ class InformationSet
         
         IS_Iterator remove(IS_Iterator iter)
         {
+            std::cout<<"-----------Removed "<<iter.getCurrentIndex()<<std::endl;
             removedBoards.insert(iter.getCurrentIndex());
             return ++iter;
         };

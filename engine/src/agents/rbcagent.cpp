@@ -51,6 +51,9 @@ currentTurn(1)
     
     cis = std::make_unique<ChessInformationSet>();
     
+    std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
+    std::cout<<"cis->size():"<<cis->size()<<std::endl;
+    
     FullChessInfo initialGameState(fen);
     if(selfColor==PieceColor::white)
     {
@@ -64,6 +67,10 @@ currentTurn(1)
         cis->add(initialGameState.white,1.0);
         opponentColor = PieceColor::white;
     }
+    std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
+    std::cout<<"cis->size():"<<cis->size()<<std::endl;
+    if(cis->validSize()==0)
+        throw std::logic_error("Chess information set in empty at creation");
 }
 
 RBCAgent::FullChessInfo::FullChessInfo(std::string fen)
@@ -973,7 +980,7 @@ std::array<std::pair<ChessInformationSet::PieceType,RBCAgent::PieceColor>,64> RB
     {
         CIS::ChessRow row = static_cast<CIS::ChessRow>(7-strPart);
         std::string oneRowPieces = figurePlacementFENParts[strPart];
-        //std::cout<<strPart<<":"<<oneRowPieces<<std::endl;;
+        //std::cout<<strPart<<":"<<oneRowPieces<<" ";
         uint colInt = 0;
         for(char c : oneRowPieces)
         {
@@ -992,7 +999,9 @@ std::array<std::pair<ChessInformationSet::PieceType,RBCAgent::PieceColor>,64> RB
             else
             {
                 CIS::ChessColumn col = static_cast<CIS::ChessColumn>(colInt);
-                std::uint8_t index = CIS::squareToBoardIndex(CIS::Square(col,row));
+                CIS::Square sq(col,row);
+                std::uint8_t index = CIS::squareToBoardIndex(sq);
+                //std::cout<<c<<":"<<sq.to_string()<<"|"<<int(index)<<" ";
                 PieceColor thisPieceColor;
                 if(c>=97)
                 {
@@ -1031,8 +1040,8 @@ std::array<std::pair<ChessInformationSet::PieceType,RBCAgent::PieceColor>,64> RB
                 figurePlacement[index] = {thisPieceType,thisPieceColor};
                 colInt += 1;
             }
-            //std::cout<<c<<" "<<std::endl;
         }
+        //std::cout<<std::endl;
         //std::cout<<strPart<<":|"<<oneRowPieces<<"| -- "<<colInt<<std::endl;;
         if(colInt!=8)
         {
@@ -1055,11 +1064,12 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
     open_spiel::chess::Color os_observer = AgentColor_to_OpenSpielColor(observer);
     open_spiel::chess::Color os_observationTarget = AgentColor_to_OpenSpielColor(observationTarget);
     
-    std::cout<<"Decode state via state string"<<std::endl;
+    //std::cout<<"Decode state via state string"<<std::endl;
     /*
      * Decode state via state string
      */
     std::string observationString = pos->get_state_string(os_observer,os_observationTarget);
+    std::cout<<"Got string"<<std::endl;
     //uint observationStringLen = observationString.size();
     std::vector<std::string> observationStringParts;
     splitObsFEN(observationString,observationStringParts);
@@ -1069,27 +1079,23 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
     std::string captureString = observationStringParts[3];
     std::string sideToPlayString = observationStringParts[4];
     std::string illegalMoveString = observationStringParts[5];
-    
     /*
-    int index = observationString.rfind(' ',observationStringLen-8);
-    std::string observationString12 = observationString.substr(0,index);
-    int index12 = observationString12.rfind(' ');
-    observationStringParts[0] = observationString.substr(0,index12);
-    observationStringParts[1] = observationString.substr(index12+1,observationString12.size()-index12-1);
-    observationStringParts[2] = observationString.substr(observationStringLen-7,1);
-    observationStringParts[3] = observationString.substr(observationStringLen-5,1);
-    observationStringParts[4] = observationString.substr(observationStringLen-3,1);
-    observationStringParts[5] = observationString.substr(observationStringLen-1,1);
+    std::cout<<"figurePlacementString:"<<figurePlacementString<<"|"<<std::endl;
+    std::cout<<"castlingString:"<<castlingString<<"|"<<std::endl;
+    std::cout<<"phaseString:"<<phaseString<<"|"<<std::endl;
+    std::cout<<"captureString:"<<captureString<<"|"<<std::endl;
+    std::cout<<"sideToPlayString:"<<sideToPlayString<<"|"<<std::endl;
+    std::cout<<"illegalMoveString:"<<illegalMoveString<<"|"<<std::endl;
     */
-    
     std::array<std::pair<ChessInformationSet::PieceType,RBCAgent::PieceColor>,64> figureBoard = FullChessInfo::decodeFENFigurePlacement(figurePlacementString);
-    auto checkEquality = [](std::pair<CIS::PieceType,PieceColor> stringDat, std::string pieceTypeName)
+    /*
+    auto pieceTypeName = [](std::pair<CIS::PieceType,PieceColor> stringDat)
     {
         if(stringDat.first==CIS::PieceType::empty ||
            stringDat.first==CIS::PieceType::unknown ||
            stringDat.second==PieceColor::empty)
-            return false;
-        std::string referencePieceTypeName;
+            return "";
+        std::string pieceTypeName;
         if(stringDat.second==PieceColor::white)
             referencePieceTypeName.append("white");
         else
@@ -1117,46 +1123,68 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
             default:
                 throw std::logic_error("False type");
         }
+        std::cout<<"|"<<pieceTypeName<<" == "<<referencePieceTypeName<<"|"<<std::endl;
         return pieceTypeName==referencePieceTypeName;
     };
+    */
     
-    std::cout<<"Decode state via state tensor"<<std::endl;
+    //std::cout<<"Decode state via state tensor"<<std::endl;
     /*
      * Decode state via state tensor
      */
+    
+    // Get state plane tensor
     std::vector<float> statePlane;
     pos->get_state_planes(true,statePlane,1,os_observer,os_observationTarget);
     if(net->get_batch_size() * net->get_nb_input_values_total() != statePlane.size())
         throw std::logic_error("Incompatible sizes");
+    std::cout<<"Got tensor"<<std::endl;
     
     std::uint16_t offset = 0;    
     auto info = std::make_unique<FullChessInfo>();
     std::array<CIS::OnePlayerChessInfo*,2> obs = {&(info->white),&(info->black)};
     
+    auto printPlane = [&](std::uint16_t offset, std::string planeName)
+    {
+        std::cout<<"Plane "<<planeName<<std::endl;
+        std::string planeStr;
+        planeStr=planeStr+"    a  b  c  d  e  f  g  h \n";
+        planeStr=planeStr+"    ---------------------- \n";
+        for(int8_t rank=7;rank>=0;rank--)
+        {
+            planeStr=planeStr+std::to_string(rank+1)+" |";
+            for(int8_t file=0;file<8;file++)
+            {
+                const size_t index = open_spiel::chess::SquareToIndex(open_spiel::chess::Square{file, rank}, 8);
+                planeStr = planeStr + " " + std::to_string((bool)statePlane[offset+index]) + " ";
+            }
+            planeStr=planeStr+"\n";
+        }
+        planeStr=planeStr+"\n";
+        std::cout<<planeStr<<std::endl;
+    };
+
+    // Decoding plane functions
     auto pieceReader = [&](std::vector<CIS::Square>& piecesList, uint limit, std::string pieceTypeName)
     {
-        for(unsigned int index=0; index<64 /*piecesList.size()*/; index++)
+        for(unsigned int index=0; index<64; index++)
         {
-            std::pair<CIS::PieceType,PieceColor> boardSquare = figureBoard[index];
+            // Observation Tensor not used for piece deduction because sensing window not implemented in openspiel
             if(statePlane[index+offset]>0.5)
             {
-                if(!checkEquality(boardSquare,pieceTypeName))
-                    std::logic_error("Observation mismatch");
                 piecesList.push_back(CIS::boardIndexToSquare(index));
             }
         }
         if(piecesList.size()>limit)
-            std::logic_error("Can not have more than "+std::to_string(limit)+" of "+pieceTypeName);
+            throw std::logic_error("Can not have more than "+std::to_string(limit)+" of "+pieceTypeName);
         offset+=64;
     };
-    
     auto scalarReader = [&]()
     {
         float scalar = statePlane[0+offset];
         offset+=64;
         return scalar;
     };
-    
     auto binaryReader = [&]()
     {
         float num = scalarReader();
@@ -1200,16 +1228,38 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
     info->lastMoveIllegal = lastMoveIllegal;
     
     //pieces position white & black 0-11
-    std::vector<std::string> colorName = {"white","black"};
-    for(std::uint16_t color=0; color<obs.size(); color++)
+    for(std::uint8_t index=0; index<figureBoard.size(); index++)
     {
-        pieceReader(obs[color]->kings,1,colorName[color]+" kings");
-        pieceReader(obs[color]->queens,9,colorName[color]+" queens");
-        pieceReader(obs[color]->rooks,10,colorName[color]+" rooks");
-        pieceReader(obs[color]->bishops,10,colorName[color]+" bishops");
-        pieceReader(obs[color]->knights,10,colorName[color]+" knights");
-        pieceReader(obs[color]->pawns,8,colorName[color]+" pawns");
+        const std::pair<CIS::PieceType,RBCAgent::PieceColor>& squarePiece = figureBoard[index];
+        if(squarePiece.second != PieceColor::empty)
+        {
+            std::uint8_t colorInd = static_cast<std::uint8_t>(squarePiece.second);
+            switch (squarePiece.first)
+            {
+                case CIS::PieceType::pawn:
+                    obs[colorInd]->pawns.push_back(CIS::boardIndexToSquare(index));
+                    break;
+                case CIS::PieceType::knight:
+                    obs[colorInd]->knights.push_back(CIS::boardIndexToSquare(index));
+                    break;
+                case CIS::PieceType::bishop:
+                    obs[colorInd]->bishops.push_back(CIS::boardIndexToSquare(index));
+                    break;
+                case CIS::PieceType::rook:
+                    obs[colorInd]->rooks.push_back(CIS::boardIndexToSquare(index));
+                    break;
+                case CIS::PieceType::queen:
+                    obs[colorInd]->queens.push_back(CIS::boardIndexToSquare(index));
+                    break;
+                case CIS::PieceType::king:
+                    obs[colorInd]->kings.push_back(CIS::boardIndexToSquare(index));
+                    break;
+                default:
+                    throw std::logic_error("Colored square must be a valid piece");
+            }
+        }
     }
+    offset+=64*12;
     
     // repetitions 1&2 12-13
     uint nr_rep=0;
@@ -1224,11 +1274,13 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
     else
         throw std::logic_error("Invalid repetitions");
     
-    // En_passant 14
+    // En_passant 14 (Not read from observation due to problems in rbc.cc : WriteTensor)
     std::vector<CIS::Square> en_passant;
     pieceReader(en_passant,1,"en_passant");
+    /*
     obs[0]->en_passant=en_passant;
     obs[1]->en_passant=en_passant;
+    */
     
     // Castling 15-18
     bool rightCastlingStr = false;
@@ -1566,8 +1618,8 @@ void RBCAgent::handleSelfMoveInfo
         throw std::logic_error("Wrong move phase marker:"+std::to_string(observation->currentPhase));
             
     CIS::OnePlayerChessInfo& selfObs = (selfColor==white)?observation->white:observation->black;
-    std::function<std::pair<bool,CIS::PieceType>(const CIS::Square&)> squareToPiece;
-    squareToPiece = selfObs.getSquarePieceTypeCheck();
+    //std::function<std::pair<bool,CIS::PieceType>(const CIS::Square&)> squareToPiece;
+    //squareToPiece = selfObs.getSquarePieceTypeCheck();
     
     //Test for castling
     bool castling = selfLastMove.is_castling;
@@ -1584,7 +1636,9 @@ void RBCAgent::handleSelfMoveInfo
     
     std::cout<<"selfObs:"<<selfObs.to_string()<<std::endl;
     
-    std::pair<bool,CIS::PieceType> fromPiece = squareToPiece(fromSquare);
+    std::function<std::pair<bool,CIS::PieceType>(const CIS::Square&)> squareToPiecePreAction;
+    squareToPiecePreAction = playerPiecesTracker.getSquarePieceTypeCheck();
+    std::pair<bool,CIS::PieceType> fromPiece = squareToPiecePreAction(fromSquare);
     if(!fromPiece.first)
         throw std::logic_error("Move from empty square");
     CIS::PieceType initialMovePiece = fromPiece.second;
@@ -1634,17 +1688,29 @@ void RBCAgent::handleSelfMoveInfo
         for(const CIS::Square& sq : currentStateMovePieces)
         {
             auto iter = previousStateSquareSet.find(sq);
-            if(iter!=previousStateSquareSet.end())
+            if(iter==previousStateSquareSet.end())
             {
+                std::cout<<"Moved:"<<sq.to_string()<<std::endl;
                 if(pieceMoved)
+                {
+                    std::cout<<"Prev:";
+                    for(auto sq : previousStateMovePieces)
+                        std::cout<<" "<<sq.to_string();
+                    std::cout<<std::endl<<"Curr:";
+                    for(auto sq : currentStateMovePieces)
+                        std::cout<<" "<<sq.to_string();
+                    std::cout<<std::endl;
                     throw std::logic_error("More than one piece of one type");
+                }
                 pieceMoved=true;
-                toSquareReal = *iter;
+                toSquareReal = sq;
             }
         }
         if(!pieceMoved)
             toSquareReal = fromSquare;
     }
+    std::cout<<"toSquareReal:"<<toSquareReal.to_string()<<std::endl;
+    
 
     std::vector<CIS::BoardClause> conditions;
     if(observation->lastMoveIllegal)
@@ -1857,16 +1923,27 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
     
     using CIS = ChessInformationSet;
     
+    std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
+    std::cout<<"cis->size():"<<cis->size()<<std::endl;    
+
     randomHypotheseSelect = std::uniform_int_distribution<std::uint64_t>(0,cis->size()-1);
     std::uint64_t selectedBoard = randomHypotheseSelect(gen);
+    std::cout<<"Selected Board:"<<selectedBoard<<std::endl;
     auto iter = cis->begin();
+    std::cout<<"Created Iterator"<<std::endl;
+    std::cout<<"getCurrentIndex:"<<iter.getCurrentIndex()<<std::endl;
     for(int i=0;i<selectedBoard;i++)
     {
+        std::cout<<"i:"<<i<<" selectedBoard:"<<selectedBoard<<std::endl;
         if(iter==cis->end())
             iter = cis->begin();
         else
             iter++;
     }
+    std::cout<<"Enter iterator"<<std::endl;
+    std::cout<<"getCurrentIndex:"<<iter.getCurrentIndex()<<std::endl;
+    if(iter == cis->end())
+        throw std::logic_error("Chess information set is empty");
     std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,double>> selectedHypothese = *iter;
     
     std::cout<<"cis->size():"<<cis->size()<<std::endl;

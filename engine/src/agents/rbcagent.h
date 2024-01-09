@@ -85,7 +85,7 @@ private:
             
             static std::array<std::pair<CIS::PieceType,PieceColor>,64> decodeFENFigurePlacement(std::string);
             
-            static void splitFEN(std::string fen, std::vector<std::string>& fenParts);            
+            static void splitFEN(std::string fen, std::vector<std::string>& fenParts);
     };
 
     CIS::OnePlayerChessInfo playerPiecesTracker;
@@ -253,7 +253,9 @@ private:
     FRIEND_TEST(rbcagentfullchessinfo_test, FEN_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, FENReconstruction_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, FENSplitting_test);
+    FRIEND_TEST(rbcagentfullchessinfo_test, DecodeFENFigurePlacement_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, Observation_test);
+    FRIEND_TEST(chessinformationset_test, boardClause_test);
 };
 }
 
