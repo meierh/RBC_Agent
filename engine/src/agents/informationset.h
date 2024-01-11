@@ -177,7 +177,7 @@ class InformationSet
         
         void remove(const std::uint64_t itemInd)
         {
-            std::cout<<"------------Item:"<<itemInd<<" removed"<<std::endl;
+            //std::cout<<"------------Item:"<<itemInd<<" removed"<<std::endl;
             removedBoards.insert(itemInd);
         };
         
@@ -272,7 +272,7 @@ class InformationSet
         
         std::unique_ptr<std::bitset<numberBitsPerItem>> getBitPattern(std::uint64_t index) const
         {
-            //std::cout<<"Get bit pattern from: "<<index<<std::endl;
+            //std::cout<<"   Get bit pattern from: "<<index<<std::endl;
             if(index>=infoSetSize)
                 throw std::invalid_argument("Index larger than information set size "+
                             std::to_string(index)+">="+std::to_string(infoSetSize));
@@ -315,6 +315,7 @@ class InformationSet
                 (*bitPattern)[bitPatInd] = getBit<std::uint8_t>(item[byteInd],7-bitInd);
             }
             */
+            //std::cout<<"   Returned bit pattern from: "<<index<<std::endl;
             return bitPattern;
         };
         
@@ -545,7 +546,6 @@ class InformationSet
                         
                         startItem++;
                     }
-                    std::cout<<"Create iterator:"<<startItem<<std::endl;
                     *this = IS_Iterator(is,startItem);
                 };
 
@@ -605,16 +605,16 @@ class InformationSet
 
                 std::unique_ptr<std::bitset<numberBitsPerItem>> operator*() const noexcept
                 {
-                    std::cout<<"Get Pattern:"<<current_Item<<std::endl;
-                    return is->getBitPattern(current_Item);
+                    //std::cout<<"  Get Pattern:"<<current_Item<<std::endl;
+                    auto bitPat = is->getBitPattern(current_Item);
+                    //std::cout<<"  Got Pattern:"<<current_Item<<std::endl;
+                    return bitPat;
                 };
                 
                 std::uint64_t getCurrentIndex() const {return current_Item;};
 
             protected:
                 InformationSet<numberBitsPerItem>* is;
-                
-            private:
                 std::uint64_t current_Item;
                 bool end;
         };
@@ -631,7 +631,7 @@ class InformationSet
         
         IS_Iterator remove(IS_Iterator iter)
         {
-            std::cout<<"-----------Removed "<<iter.getCurrentIndex()<<std::endl;
+            //std::cout<<"-----------Removed "<<iter.getCurrentIndex()<<std::endl;
             removedBoards.insert(iter.getCurrentIndex());
             return ++iter;
         };
@@ -642,7 +642,7 @@ class InformationSet
             remove(iterator.getCurrentIndex());
         };
         */
-        
+
     private:
         std::unique_ptr<std::uint8_t[]> infoSet;
         std::uint64_t infoSetSize; //Last index in infoSet with a valid item

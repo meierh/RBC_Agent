@@ -36,22 +36,23 @@ TEST(rbcagentfullchessinfo_test, FEN_test)
     whiteSet.pawns[4] = SQ(COL::E,ROW::four);
     whiteSet.no_progress_count = 0;
     blackSet.no_progress_count++;
-    whiteSet.en_passant.push_back(SQ(COL::E,ROW::three));
+    whiteSet.en_passant_valid = true;
+    whiteSet.en_passant = SQ(COL::E,ROW::three);
     fenIni = RBCAgent::FullChessInfo::getFEN(whiteSet,blackSet,RBCAgent::PieceColor::black,1);
     EXPECT_EQ(fenIni,"rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1");
     
     blackSet.pawns[2] = SQ(COL::C,ROW::five);
     whiteSet.no_progress_count++;
     blackSet.no_progress_count = 0;
-    whiteSet.en_passant.clear();
-    blackSet.en_passant.push_back(SQ(COL::C,ROW::six));
+    blackSet.en_passant_valid = true;
+    blackSet.en_passant = SQ(COL::C,ROW::six);
     fenIni = RBCAgent::FullChessInfo::getFEN(whiteSet,blackSet,RBCAgent::PieceColor::white,2);
     EXPECT_EQ(fenIni,"rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2");
     
     whiteSet.knights[1] = SQ(COL::F,ROW::three);
     whiteSet.no_progress_count++;
     blackSet.no_progress_count++;
-    blackSet.en_passant.clear();
+    whiteSet.en_passant_valid = false;
     whiteSet.no_progress_count++;
     fenIni = RBCAgent::FullChessInfo::getFEN(whiteSet,blackSet,RBCAgent::PieceColor::black,2);
     EXPECT_EQ(fenIni,"rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2");    

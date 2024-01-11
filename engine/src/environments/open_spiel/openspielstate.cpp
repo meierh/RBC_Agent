@@ -287,11 +287,12 @@ std::string OpenSpielState::ActionToMoveString(Action action, open_spiel::chess:
     return moveString;
 }
 
-std::pair<std::uint8_t,open_spiel::chess::Move> OpenSpielState::ActionToIncompleteMove(Action action, open_spiel::chess::Color actor)
+std::tuple<std::uint8_t,open_spiel::chess::Move,bool> OpenSpielState::ActionToIncompleteMove(Action action, open_spiel::chess::Color actor)
 {
-    auto result = std::pair<std::uint8_t,open_spiel::chess::Move>();
-    open_spiel::chess::Move& move = result.second;
-    std::uint8_t& phase = result.first;
+    auto result = std::tuple<std::uint8_t,open_spiel::chess::Move,bool>();
+    std::uint8_t& phase = std::get<0>(result);
+    open_spiel::chess::Move& move = std::get<1>(result);
+    bool& passMove = std::get<2>(result);
     
     std::string moveString = ActionToMoveString(action,actor);
     std::string from, to, promotionType;
@@ -339,27 +340,42 @@ std::pair<std::uint8_t,open_spiel::chess::Move> OpenSpielState::ActionToIncomple
             phase = 0;
             from = moveString.substr(6,2);
             move.from = stringToSquare(from);
+            passMove = false;
         }
-        if(moveString.size()==4 || moveString.size()==5)
+        else if(moveString.size()==4 || moveString.size()==5)
         {
-            phase = 1;
-            from = moveString.substr(0,2);
-            to = moveString.substr(2,2);
-            move.from = stringToSquare(from);
-            move.to = stringToSquare(to);
-            move.promotion_type = open_spiel::chess::PieceType::kEmpty;
-            if(moveString.size()==5)
+            if(moveString=="pass")
             {
-                promotionType = moveString.substr(4,1);
-                move.promotion_type = stringToPieceType(promotionType);
+                phase = 1;
+                from = "a1";
+                to = "a1";
+                move.from = stringToSquare(from);
+                move.to = stringToSquare(to);
+                move.promotion_type = open_spiel::chess::PieceType::kEmpty;
+                passMove = true;
+            }
+            else
+            {
+                phase = 1;
+                from = moveString.substr(0,2);
+                to = moveString.substr(2,2);
+                move.from = stringToSquare(from);
+                move.to = stringToSquare(to);
+                move.promotion_type = open_spiel::chess::PieceType::kEmpty;
+                passMove = false;
+                if(moveString.size()==5)
+                {
+                    promotionType = moveString.substr(4,1);
+                    move.promotion_type = stringToPieceType(promotionType);
+                }
             }
         }
         else
-            throw std::logic_error("Invalid LAN string received");
+            throw std::logic_error("Invalid LAN string received: "+std::to_string(moveString.size())+"|"+moveString+"|");
     }
     catch(std::logic_error e)
     {
-        std::cout<<e.what()<<std::endl;
+        std::cout<<"What:"<<e.what()<<std::endl;
         throw std::logic_error("Problem: "+moveString);
     }     
     return result;
@@ -377,4 +393,13 @@ open_spiel::rbc::MovePhase OpenSpielState::currentPhase() const
         throw std::logic_error("Can not cast state to RbcState");
     return rbcState->phase();
 }
+
+std::string OpenSpielState::ToString()
+{
+    open_spiel::rbc::RbcState* rbcState = dynamic_cast<open_spiel::rbc::RbcState*>(spielState.get());
+    if(rbcState==nullptr)
+        throw std::logic_error("Cast to RBC state failed");
+    return rbcState->Board().ToFEN();
+}
+
 

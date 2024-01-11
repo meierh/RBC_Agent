@@ -51,9 +51,6 @@ currentTurn(1)
     
     cis = std::make_unique<ChessInformationSet>();
     
-    std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
-    std::cout<<"cis->size():"<<cis->size()<<std::endl;
-    
     FullChessInfo initialGameState(fen);
     if(selfColor==PieceColor::white)
     {
@@ -67,8 +64,6 @@ currentTurn(1)
         cis->add(initialGameState.white,1.0);
         opponentColor = PieceColor::white;
     }
-    std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
-    std::cout<<"cis->size():"<<cis->size()<<std::endl;
     if(cis->validSize()==0)
         throw std::logic_error("Chess information set in empty at creation");
 }
@@ -168,12 +163,23 @@ RBCAgent::FullChessInfo::FullChessInfo(std::string fen)
         char rowChar = enPassantString[1];
         int rowInt = rowChar-'1';
         if(this->nextTurn == PieceColor::white)
-            this->white.en_passant.push_back(CIS::Square(colInt,rowInt));
+        {
+            this->black.en_passant = CIS::Square(colInt,rowInt);
+            this->black.en_passant_valid = true;
+            this->white.en_passant_valid = false;
+        }
         else
-            this->black.en_passant.push_back(CIS::Square(colInt,rowInt));
+        {
+            this->white.en_passant = CIS::Square(colInt,rowInt);
+            this->white.en_passant_valid = true;
+            this->black.en_passant_valid = false;
+        }
     }
     else if(enPassantString=="-")
-    {}
+    {
+        this->white.en_passant_valid = false;
+        this->black.en_passant_valid = false;
+    }
     else
         throw std::logic_error("Invalid character of castling string");
     
@@ -376,24 +382,26 @@ std::string RBCAgent::FullChessInfo::getFEN
             castlingString += 'K'+charOffset;
         if(oneColorInfo.queenside)
             castlingString += 'Q'+charOffset;
-            
-        for(const CIS::Square& sq : oneColorInfo.en_passant)
-        {
-            if(enPassantString.size()>0)
-                throw std::logic_error("More than one en_passant is not possible!");
-            enPassantString += sq.to_string();
-            /*
-            unsigned int column = static_cast<unsigned int>(sq.column);
-            unsigned int row = static_cast<unsigned int>(sq.row);
-            char columnChar = column + 97;
-            char rowChar = row + 60;
-            enPassantString += columnChar;
-            enPassantString += rowChar;
-            */
-        }
         
         charOffset+=32;
     }
+    
+    if(nextTurn==PieceColor::white)
+    {
+        if(black.en_passant_valid)
+        {
+            enPassantString += black.en_passant.to_string();
+        }
+    }
+    else if(nextTurn==PieceColor::black)
+    {
+        if(white.en_passant_valid)
+        {
+            enPassantString += white.en_passant.to_string();
+        }
+    }
+    else
+        throw std::logic_error("Empty color can not happen!"); 
     
     halfTurns = std::min(white.no_progress_count,black.no_progress_count);
         
@@ -611,18 +619,19 @@ void RBCAgent::set_search_settings
     //Reduce hypotheses using the previous move information
     if(!(currentTurn==1 && selfColor==PieceColor::white))
     {
-        std::cout<<"Move information"<<std::endl;
+        std::cout<<"------Reduce hypotheses using the previous move information--------"<<selfColor<<std::endl;
         handleOpponentMoveInfo(rbcState);
+        std::cout<<"-----------------------Forward hypotheses--------------------------"<<selfColor<<std::endl;
         stepForwardHypotheses();
     }
     
     //Scan the board an reduce hypotheses
-    std::cout<<"Scan information"<<std::endl;
+    std::cout<<"------------------Scan the board and reduce hypotheses------------------"<<selfColor<<std::endl;
     ChessInformationSet::Square scanCenter = applyScanAction(rbcState);
     handleScanInfo(rbcState,scanCenter);
-        
+            
     // setup MCTS search
-    std::cout<<"MCTS setup"<<std::endl;
+    std::cout<<"----------------------------MCTS setup----------------------------------"<<selfColor<<std::endl;
     this->evalInfo = evalInfo;
     StateObj* chessState = setupMoveSearchState();
     MCTSAgent::set_search_settings(chessState,searchLimits,evalInfo);
@@ -631,15 +640,13 @@ void RBCAgent::set_search_settings
 void RBCAgent::perform_action()
 {
     // Run mcts tree and set action to game
-    std::cout<<"Search action"<<std::endl;
+    std::cout<<"----------------------------Run action----------------------------------"<<selfColor<<std::endl;
     //throw std::runtime_error("Temp Stop");
     MCTSAgent::perform_action();
     delete this->state;
-    
-    evalInfo->bestMove = 1258;
-    
+        
     //Reduce hypotheses using the own move information
-    std::cout<<"perform_action -- Handle action move information"<<std::endl;
+    std::cout<<"--------------------Handle action move information----------------------"<<selfColor<<std::endl;
     handleSelfMoveInfo(rbcState);
 }
 
@@ -693,6 +700,8 @@ std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,do
     const RBCAgent::PieceColor selfColor
 ) const
 {
+    //std::cout<<"Player:"<<selfColor<<" generates Hypotheses of state of player:"<<opponentColor<<std::endl;
+    
     if(selfColor == PieceColor::empty)
         throw std::invalid_argument("selfColor must not be PieceColor::empty");
     
@@ -719,227 +728,109 @@ std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,do
         fullState.nextCompleteTurn = currentTurn+1;
     }
     std::string fen = fullState.getFEN();
+    //std::cout<<"Construct state for possible moves:"<<fen<<std::endl;
     OpenSpielState hypotheticState(open_spiel::gametype::SupportedOpenSpielVariants::RBC);
     hypotheticState.set(fen,false,open_spiel::gametype::SupportedOpenSpielVariants::RBC);
+    hypotheticState.do_action(0); // Dummy sense to get to moving phase
+    if(OpenSpielColor_to_RBCColor(hypotheticState.currentPlayer())!=opponentColor)
+    {
+        throw std::logic_error("Hypothetic state has invalid player color!");
+    }
+    if(OpenSpielPhase_to_RBCPhase(hypotheticState.currentPhase())!=MovePhase::Move)
+    {
+        throw std::logic_error("Hypothetic state has invalid move phase!");
+    }
     open_spiel::chess::Color os_opponent = AgentColor_to_OpenSpielColor(opponentColor);
     std::vector<Action> legal_actions_int = hypotheticState.legal_actions();
-    std::vector<open_spiel::chess::Move> legal_actions_move(legal_actions_int.size());
+    std::vector<std::pair<open_spiel::chess::Move,bool>> legal_actions_move(legal_actions_int.size());
     for(unsigned int actionInd=0; actionInd<legal_actions_int.size(); actionInd++)
     {
-        std::pair<std::uint8_t,open_spiel::chess::Move> move = hypotheticState.ActionToIncompleteMove(legal_actions_int[actionInd],os_opponent);
-        MovePhase actionPhaseType = static_cast<MovePhase>(move.first);
+        std::tuple<std::uint8_t,open_spiel::chess::Move,bool> move = hypotheticState.ActionToIncompleteMove(legal_actions_int[actionInd],os_opponent);
+        MovePhase actionPhaseType = static_cast<MovePhase>(std::get<0>(move));
+        open_spiel::chess::Move& moveData = std::get<1>(move);
+        bool passMove =std::get<2>(move);
         if(actionPhaseType == MovePhase::Sense)
         {
             throw std::logic_error("Invalid phase action");
         }
-        completeMoveData(move.second,piecesOpponent);
-        legal_actions_move[actionInd] = move.second;
+        if(!passMove)
+        {
+            completeMoveData(moveData,piecesOpponent);
+        }
+        legal_actions_move[actionInd] = {moveData,passMove};
     }
-    for(const open_spiel::chess::Move& move : legal_actions_move)
+    
+    for(const std::pair<open_spiel::chess::Move,bool>& legal_action : legal_actions_move)
     {
-        CIS::Square from(move.from);
-        CIS::Square to(move.to);
-        CIS::PieceType pieceType = CIS::OpenSpielPieceType_to_CISPieceType(move.piece.type);
-        PieceColor moveColor = OpenSpielColor_to_RBCColor(move.piece.color);
-        CIS::PieceType promPieceType = CIS::OpenSpielPieceType_to_CISPieceType(move.promotion_type);
-        bool castling = move.is_castling;
+        const open_spiel::chess::Move& move = legal_action.first;
+        bool passMove = legal_action.second;
         
-        hypotheses->push_back({piecesOpponent,0});
-        CIS::OnePlayerChessInfo& new_hypothese = hypotheses->back().first;
-        
-        // test for color match
-        if(moveColor!=opponentColor)
-            throw std::logic_error("Opponent move color mismatch!");
-        
-        //process possible promotion of pawn
-        if(promPieceType==CIS::PieceType::empty)
+        if(passMove)
         {
-            bool isPromotion=false;
-            if(pieceType==CIS::PieceType::pawn)
+            hypotheses->push_back({piecesOpponent,0});
+        }
+        else
+        {
+            CIS::Square from(move.from);
+            CIS::Square to(move.to);
+            CIS::PieceType pieceType = CIS::OpenSpielPieceType_to_CISPieceType(move.piece.type);
+            PieceColor moveColor = OpenSpielColor_to_RBCColor(move.piece.color);
+            CIS::PieceType promPieceType = CIS::OpenSpielPieceType_to_CISPieceType(move.promotion_type);
+            bool castling = move.is_castling;
+            
+            hypotheses->push_back({piecesOpponent,0});
+            CIS::OnePlayerChessInfo& new_hypothese = hypotheses->back().first;
+            
+            // test for color match
+            if(moveColor!=opponentColor)
+                throw std::logic_error("Opponent move color mismatch!");
+            
+            // Correctness checks
+            if(promPieceType==CIS::PieceType::empty)
             {
-                if(moveColor==PieceColor::white)
+                bool isPromotion=false;
+                if(pieceType==CIS::PieceType::pawn)
                 {
-                    if(to.row==CIS::ChessRow::eight)
-                        isPromotion=true;
+                    if(moveColor==PieceColor::white)
+                    {
+                        if(to.row==CIS::ChessRow::eight)
+                            isPromotion=true;
+                    }
+                    else
+                    {
+                        if(to.row==CIS::ChessRow::one)
+                            isPromotion=true;
+                    }
                 }
-                else
+                if(isPromotion)
+                    throw std::logic_error("Error in received legal move: Pawn at end but no promotion!");
+            }
+            if(promPieceType!=CIS::PieceType::empty)
+            {
+                if(castling)
+                    throw std::logic_error("Castling and Promotion in one move not possible!");
+                if(pieceType!=CIS::PieceType::pawn)
+                    throw std::logic_error("Non pawn piece can not be promoted!");
+                if(promPieceType==CIS::PieceType::pawn || promPieceType==CIS::PieceType::king)
+                    throw std::logic_error("Piece can not be promoted to a pawn or a king!");
+                if(pieceType==CIS::PieceType::pawn)
                 {
-                    if(to.row==CIS::ChessRow::one)
-                        isPromotion=true;
-                }
-            }
-            if(isPromotion)
-                throw std::logic_error("Error in received legal move: Pawn at end but no promotion!");
-        }
-        if(promPieceType!=CIS::PieceType::empty)
-        {
-            if(castling)
-                throw std::logic_error("Castling and Promotion in one move not possible!");
-            if(pieceType!=CIS::PieceType::pawn)
-                throw std::logic_error("Non pawn piece can not be promoted!");
-            if(promPieceType==CIS::PieceType::pawn || promPieceType==CIS::PieceType::king)
-                throw std::logic_error("Piece can not be promoted to a pawn or a king!");
-            if(pieceType==CIS::PieceType::pawn)
-            {
-                if(moveColor==PieceColor::white)
-                {
-                    if(to.row!=CIS::ChessRow::eight || from.row!=CIS::ChessRow::seven)
-                        throw std::logic_error("False from and to squares for promotion!");
-                }
-                else
-                {
-                    if(to.row!=CIS::ChessRow::one || from.row!=CIS::ChessRow::two)
-                        throw std::logic_error("False from and to squares for promotion!");
+                    if(moveColor==PieceColor::white)
+                    {
+                        if(to.row!=CIS::ChessRow::eight || from.row!=CIS::ChessRow::seven)
+                            throw std::logic_error("False from and to squares for promotion!");
+                    }
+                    else
+                    {
+                        if(to.row!=CIS::ChessRow::one || from.row!=CIS::ChessRow::two)
+                            throw std::logic_error("False from and to squares for promotion!");
+                    }
                 }
             }
             
-            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> pawnGetter = new_hypothese.getPieceIter(new_hypothese.pawns);
-            
-            auto pawnIter = pawnGetter(from);
-            if(pawnIter==new_hypothese.pawns.end())
-                throw std::logic_error("Pawn moves from position where it does not sit!");
-            
-            new_hypothese.pawns.erase(pawnIter);
-            switch(promPieceType)
-            {
-                case CIS::PieceType::knight:
-                    new_hypothese.knights.push_back(to);
-                    break;
-                case CIS::PieceType::bishop:
-                    new_hypothese.bishops.push_back(to);
-                    break;
-                case CIS::PieceType::rook:
-                    new_hypothese.rooks.push_back(to);
-                    break;
-                case CIS::PieceType::queen:
-                    new_hypothese.queens.push_back(to);
-                    break;
-                default:
-                    throw std::logic_error("Piece promoted to non valid piece type!");
-            }
-            new_hypothese.no_progress_count=0;
-            
-            continue;
+            new_hypothese.applyMove(from,to,pieceType,promPieceType,castling);
         }
-        
-        //process possible castling
-        if(castling)
-        {
-           enum Castling {queenside,kingside};
-            Castling side;
-            
-            if(pieceType!=CIS::PieceType::king)
-                throw std::logic_error("Castling but king not moved!");            
-            if(new_hypothese.kings.size()!=1)
-                throw std::logic_error("There must be exactly one king!");
-            CIS::Square& theKing = new_hypothese.kings[0];
-            theKing = to;
-            CIS::Square rookDest = to;
-            
-            if(from.column < to.column)
-            {
-                rookDest.horizMinus(1);
-                side = Castling::kingside;
-                if(!new_hypothese.kingside)
-                    throw std::logic_error("Castling move kingside but illegal!");
-            }
-            else if(from.column > to.column)
-            {
-                rookDest.horizPlus(1);               
-                side = Castling::queenside;
-                if(!new_hypothese.queenside)
-                    throw std::logic_error("Castling move queenside but illegal!");
-            }
-            else
-                throw std::logic_error("No movement in castling!");
-            
-            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> rookGetter = new_hypothese.getPieceIter(new_hypothese.rooks);
-            
-            auto rookIter = new_hypothese.rooks.end();
-            if(side==Castling::kingside)
-                rookIter = rookGetter({CIS::ChessColumn::H,theKing.row});
-            else
-                rookIter = rookGetter({CIS::ChessColumn::A,theKing.row});            
-            if(rookIter==new_hypothese.rooks.end())
-                throw std::logic_error("No rook on initial position in castling move!");
-
-            *rookIter = rookDest;
-            
-            new_hypothese.kingside=false;
-            new_hypothese.queenside=false;
-
-            continue;
-        }
-        
-        //process all other movement
-        if(pieceType==CIS::PieceType::pawn)
-        {
-            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> pawnGetter = new_hypothese.getPieceIter(new_hypothese.pawns);
-            int step = static_cast<int>(to.row)-static_cast<int>(from.row);
-            uint stepSize = std::abs(step);
-            bool doubleStep = (stepSize==2)?true:false;
-            if(stepSize!=1 && stepSize!=2)
-                throw std::logic_error("Pawn must move eiter one or two steps forward!");
-            auto pawnIter = pawnGetter(from);
-            if(pawnIter==new_hypothese.pawns.end())
-                throw std::logic_error("Moved pawn from nonexistant position!");
-            *pawnIter = to;
-            if(doubleStep)
-            {
-                CIS::Square en_passant_sq = from;
-                (step<0)?en_passant_sq.vertMinus(1):en_passant_sq.vertPlus(1);
-                new_hypothese.en_passant.push_back(en_passant_sq);
-            }
-        }
-        else if(pieceType==CIS::PieceType::rook)
-        {
-            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> rookGetter = new_hypothese.getPieceIter(new_hypothese.rooks);
-            auto rookIter = rookGetter(from);
-            if(rookIter==new_hypothese.rooks.end())
-                throw std::logic_error("Moved rook from nonexistant position!");
-            if(from.row==CIS::ChessRow::one || from.row==CIS::ChessRow::eight)
-            {
-                if(from.column==CIS::ChessColumn::A)
-                    new_hypothese.queenside=false;
-                if(from.column==CIS::ChessColumn::H)
-                    new_hypothese.kingside=false;
-            }
-            *rookIter = to;
-        }
-        else if(pieceType==CIS::PieceType::knight)
-        {
-            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> knightGetter = new_hypothese.getPieceIter(new_hypothese.knights);
-            auto knightIter = knightGetter(from);
-            if(knightIter==new_hypothese.knights.end())
-                throw std::logic_error("Moved knight from nonexistant position!");
-            *knightIter = to;
-        }
-        else if(pieceType==CIS::PieceType::bishop)
-        {
-            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> bishopGetter = new_hypothese.getPieceIter(new_hypothese.bishops);
-            auto bishopIter = bishopGetter(from);
-            if(bishopIter==new_hypothese.bishops.end())
-                throw std::logic_error("Moved bishop from nonexistant position!");
-            *bishopIter = to;
-        }
-        else if(pieceType==CIS::PieceType::queen)
-        {
-            std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> queenGetter = new_hypothese.getPieceIter(new_hypothese.queens);
-            auto queenIter = queenGetter(from);
-            if(queenIter==new_hypothese.queens.end())
-                throw std::logic_error("Moved queen from nonexistant position!");
-            *queenIter = to; 
-        }
-        else if(pieceType==CIS::PieceType::king)
-        {
-            if(new_hypothese.kings.size()!=1)
-                throw std::logic_error("There must be exactly one king!");
-            CIS::Square& theKing = new_hypothese.kings[0];
-            theKing = to;
-            CIS::Square rookDest = to;
-            new_hypothese.kingside=false;
-            new_hypothese.queenside=false;
-        }
+        //std::cout<<"Generated hypothese: "<<hypotheses->back().first.to_string()<<std::endl;
     }
     return hypotheses;
 }
@@ -1069,7 +960,7 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
      * Decode state via state string
      */
     std::string observationString = pos->get_state_string(os_observer,os_observationTarget);
-    std::cout<<"Got string"<<std::endl;
+    //std::cout<<"Got string"<<std::endl;
     //uint observationStringLen = observationString.size();
     std::vector<std::string> observationStringParts;
     splitObsFEN(observationString,observationStringParts);
@@ -1138,7 +1029,7 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::decodeObservation
     pos->get_state_planes(true,statePlane,1,os_observer,os_observationTarget);
     if(net->get_batch_size() * net->get_nb_input_values_total() != statePlane.size())
         throw std::logic_error("Incompatible sizes");
-    std::cout<<"Got tensor"<<std::endl;
+    //std::cout<<"Got tensor"<<std::endl;
     
     std::uint16_t offset = 0;    
     auto info = std::make_unique<FullChessInfo>();
@@ -1455,17 +1346,17 @@ std::unique_ptr<std::vector<float>> RBCAgent::encodeStatePlane
     
     if(nextTurn == PieceColor::white)
     {
-        for(const CIS::Square& sq : state[0]->en_passant)
+        if(state[0]->en_passant_valid)
         {
-            unsigned int index = CIS::squareToBoardIndex(sq);
+            unsigned int index = CIS::squareToBoardIndex(state[0]->en_passant);
             infoPlane[offset+index] = 1.0;
         }
     }
     else if(nextTurn == PieceColor::black)
     {
-        for(const CIS::Square& sq : state[1]->en_passant)
+        if(state[1]->en_passant_valid)
         {
-            unsigned int index = CIS::squareToBoardIndex(sq);
+            unsigned int index = CIS::squareToBoardIndex(state[1]->en_passant);
             infoPlane[offset+index] = 1.0;
         }
     }
@@ -1526,12 +1417,12 @@ void RBCAgent::handleOpponentMoveInfo
     
     // test for captured pawns
     auto pawnHere = selfObs.getBlockCheck(selfObs.pawns,CIS::PieceType::pawn);
-    auto enPassantHere = selfState.getBlockCheck(selfState.en_passant,CIS::PieceType::pawn);
     for(CIS::Square& sq : selfState.pawns)
     {
         if(!pawnHere(sq))
         // Pawn of self was captured
         {
+            std::cout<<"Pawn captured at: "<<sq.to_string()<<std::endl;
             onePieceCaptured = true;
             bool inBoard;
             CIS::Square en_passant_sq = sq;
@@ -1543,7 +1434,14 @@ void RBCAgent::handleOpponentMoveInfo
                 throw std::logic_error("En-passant field can not be outside the field!");
             CIS::BoardClause capturedDirect(sq,CIS::BoardClause::PieceType::any);
             CIS::BoardClause capturedEnPassant(en_passant_sq,CIS::BoardClause::PieceType::pawn);
-            conditions.push_back(capturedDirect | capturedEnPassant);
+            if(playerPiecesTracker.en_passant_valid && playerPiecesTracker.en_passant==en_passant_sq)
+            {
+                conditions.push_back(capturedDirect | capturedEnPassant);
+            }
+            else
+            {
+                conditions.push_back(capturedDirect);
+            }
         }
     }
     
@@ -1594,262 +1492,271 @@ void RBCAgent::handleSelfMoveInfo
     
 // Decode action
     Action selfLastAction = this->evalInfo->bestMove;
-    std::cout<<"Player "<<selfColor<<" handles own move information of "<<selfLastAction<<std::endl;
     open_spiel::chess::Color os_self = AgentColor_to_OpenSpielColor(selfColor);
-    std::pair<std::uint8_t,open_spiel::chess::Move> move = rbcState->ActionToIncompleteMove(selfLastAction,os_self);
-    MovePhase actionPhaseType = static_cast<MovePhase>(move.first);
+    std::cout<<"Player "<<selfColor<<" handles own move information: "<<rbcState->ActionToMoveString(selfLastAction,os_self)<<std::endl;
+    std::tuple<std::uint8_t,open_spiel::chess::Move,bool> move = rbcState->ActionToIncompleteMove(selfLastAction,os_self);
+    MovePhase actionPhaseType = static_cast<MovePhase>(std::get<0>(move));
+    open_spiel::chess::Move& moveData = std::get<1>(move);
+    bool passMove = std::get<2>(move);
     if(actionPhaseType == MovePhase::Sense)
     {
         throw std::logic_error("Invalid phase action");
     }
-    completeMoveData(move.second,playerPiecesTracker);
-    open_spiel::chess::Move& selfLastMove = move.second;
-    std::cout<<"selfLastMove:"<<selfLastMove<<std::endl;
-        
-//Apply action to state
-    rbcState->do_action(evalInfo->bestMove);
-    std::cout<<"Action applied"<<std::endl;
-
-//Decode an evaluate after action status and infer information from that
-    std::unique_ptr<FullChessInfo> observation = decodeObservation(rbcState,selfColor,selfColor);
-    if(observation->nextTurn==selfColor || selfColor==PieceColor::empty)
-        throw std::logic_error("Wrong turn marker");
-    if(observation->currentPhase!=MovePhase::Sense)
-        throw std::logic_error("Wrong move phase marker:"+std::to_string(observation->currentPhase));
+    if(!passMove)
+    // No information can be infered from pass move
+    {
+        completeMoveData(moveData,playerPiecesTracker);
+        open_spiel::chess::Move& selfLastMove = moveData;
+        //std::cout<<"selfLastMove:"<<selfLastMove<<std::endl;
             
-    CIS::OnePlayerChessInfo& selfObs = (selfColor==white)?observation->white:observation->black;
-    //std::function<std::pair<bool,CIS::PieceType>(const CIS::Square&)> squareToPiece;
-    //squareToPiece = selfObs.getSquarePieceTypeCheck();
-    
-    //Test for castling
-    bool castling = selfLastMove.is_castling;
+    //Apply action to state
+        rbcState->do_action(evalInfo->bestMove);
+        //std::cout<<"Action applied"<<std::endl;
 
-    //Test for promotion
-    CIS::PieceType promotionType = CIS::OpenSpielPieceType_to_CISPieceType(selfLastMove.promotion_type);
-    bool promotion = (promotionType!=CIS::PieceType::empty)?true:false;        
+    //Decode an evaluate after action status and infer information from that
+        std::unique_ptr<FullChessInfo> observation = decodeObservation(rbcState,selfColor,selfColor);
+        if(observation->nextTurn==selfColor || selfColor==PieceColor::empty)
+            throw std::logic_error("Wrong turn marker");
+        if(observation->currentPhase!=MovePhase::Sense)
+            throw std::logic_error("Wrong move phase marker:"+std::to_string(observation->currentPhase));
+                
+        CIS::OnePlayerChessInfo& selfObs = (selfColor==white)?observation->white:observation->black;
+        //std::function<std::pair<bool,CIS::PieceType>(const CIS::Square&)> squareToPiece;
+        //squareToPiece = selfObs.getSquarePieceTypeCheck();
+        
+        //Test for castling
+        bool castling = selfLastMove.is_castling;
 
-    // Find moved piece and determine the squares
-    CIS::Square fromSquare = CIS::Square(selfLastMove.from);
-    std::cout<<"fromSquare:"<<fromSquare.to_string()<<std::endl;
-    CIS::Square toSquareAim = CIS::Square(selfLastMove.to);
-    std::cout<<"toSquareAim:"<<toSquareAim.to_string()<<std::endl;
-    
-    std::cout<<"selfObs:"<<selfObs.to_string()<<std::endl;
-    
-    std::function<std::pair<bool,CIS::PieceType>(const CIS::Square&)> squareToPiecePreAction;
-    squareToPiecePreAction = playerPiecesTracker.getSquarePieceTypeCheck();
-    std::pair<bool,CIS::PieceType> fromPiece = squareToPiecePreAction(fromSquare);
-    if(!fromPiece.first)
-        throw std::logic_error("Move from empty square");
-    CIS::PieceType initialMovePiece = fromPiece.second;
-    std::cout<<"MovePiece:"<<(int)initialMovePiece<<std::endl;
+        //Test for promotion
+        CIS::PieceType promotionType = CIS::OpenSpielPieceType_to_CISPieceType(selfLastMove.promotion_type);
+        bool promotion = (promotionType!=CIS::PieceType::empty)?true:false;        
 
-    //Find toSquareReal
-    CIS::Square toSquareReal;
-    std::vector<CIS::Square> previousStateMovePieces;
-    std::vector<CIS::Square> currentStateMovePieces;    
-    switch (initialMovePiece)
-    {
-        case CIS::PieceType::pawn:
-            previousStateMovePieces = playerPiecesTracker.pawns;
-            currentStateMovePieces = selfObs.pawns;
-            break;
-        case CIS::PieceType::knight:
-            previousStateMovePieces = playerPiecesTracker.knights;
-            currentStateMovePieces = selfObs.knights;
-            break;
-        case CIS::PieceType::bishop:
-            previousStateMovePieces = playerPiecesTracker.bishops;
-            currentStateMovePieces = selfObs.bishops;
-            break;
-        case CIS::PieceType::rook:
-            previousStateMovePieces = playerPiecesTracker.rooks;
-            currentStateMovePieces = selfObs.rooks;
-            break;
-        case CIS::PieceType::queen:
-            previousStateMovePieces = playerPiecesTracker.queens;
-            currentStateMovePieces = selfObs.queens;
-            break;
-        case CIS::PieceType::king:
-            previousStateMovePieces = playerPiecesTracker.kings;
-            currentStateMovePieces = selfObs.kings;
-            break;
-        default:
-            throw std::logic_error("Moved piece is empty!");
-    }
-    if(promotion)
-    {
-        toSquareReal = toSquareAim;
-    }
-    else
-    {
-        std::unordered_set<CIS::Square,CIS::Square::Hasher> previousStateSquareSet(previousStateMovePieces.begin(),previousStateMovePieces.end());
-        bool pieceMoved = false;
-        for(const CIS::Square& sq : currentStateMovePieces)
+        // Find moved piece and determine the squares
+        CIS::Square fromSquare = CIS::Square(selfLastMove.from);
+        //std::cout<<"fromSquare:"<<fromSquare.to_string()<<std::endl;
+        CIS::Square toSquareAim = CIS::Square(selfLastMove.to);
+        //std::cout<<"toSquareAim:"<<toSquareAim.to_string()<<std::endl;
+        
+        //std::cout<<"selfObs:"<<selfObs.to_string()<<std::endl;
+        
+        std::function<std::pair<bool,CIS::PieceType>(const CIS::Square&)> squareToPiecePreAction;
+        squareToPiecePreAction = playerPiecesTracker.getSquarePieceTypeCheck();
+        std::pair<bool,CIS::PieceType> fromPiece = squareToPiecePreAction(fromSquare);
+        if(!fromPiece.first)
+            throw std::logic_error("Move from empty square");
+        CIS::PieceType initialMovePiece = fromPiece.second;
+        //std::cout<<"MovePiece:"<<(int)initialMovePiece<<std::endl;
+
+        //Find toSquareReal
+        CIS::Square toSquareReal;
+        std::vector<CIS::Square> previousStateMovePieces;
+        std::vector<CIS::Square> currentStateMovePieces;    
+        switch (initialMovePiece)
         {
-            auto iter = previousStateSquareSet.find(sq);
-            if(iter==previousStateSquareSet.end())
-            {
-                std::cout<<"Moved:"<<sq.to_string()<<std::endl;
-                if(pieceMoved)
-                {
-                    std::cout<<"Prev:";
-                    for(auto sq : previousStateMovePieces)
-                        std::cout<<" "<<sq.to_string();
-                    std::cout<<std::endl<<"Curr:";
-                    for(auto sq : currentStateMovePieces)
-                        std::cout<<" "<<sq.to_string();
-                    std::cout<<std::endl;
-                    throw std::logic_error("More than one piece of one type");
-                }
-                pieceMoved=true;
-                toSquareReal = sq;
-            }
+            case CIS::PieceType::pawn:
+                previousStateMovePieces = playerPiecesTracker.pawns;
+                currentStateMovePieces = selfObs.pawns;
+                break;
+            case CIS::PieceType::knight:
+                previousStateMovePieces = playerPiecesTracker.knights;
+                currentStateMovePieces = selfObs.knights;
+                break;
+            case CIS::PieceType::bishop:
+                previousStateMovePieces = playerPiecesTracker.bishops;
+                currentStateMovePieces = selfObs.bishops;
+                break;
+            case CIS::PieceType::rook:
+                previousStateMovePieces = playerPiecesTracker.rooks;
+                currentStateMovePieces = selfObs.rooks;
+                break;
+            case CIS::PieceType::queen:
+                previousStateMovePieces = playerPiecesTracker.queens;
+                currentStateMovePieces = selfObs.queens;
+                break;
+            case CIS::PieceType::king:
+                previousStateMovePieces = playerPiecesTracker.kings;
+                currentStateMovePieces = selfObs.kings;
+                break;
+            default:
+                throw std::logic_error("Moved piece is empty!");
         }
-        if(!pieceMoved)
-            toSquareReal = fromSquare;
-    }
-    std::cout<<"toSquareReal:"<<toSquareReal.to_string()<<std::endl;
-    
-
-    std::vector<CIS::BoardClause> conditions;
-    if(observation->lastMoveIllegal)
-    {
         if(promotion)
-            throw std::logic_error("Promotion can not be an illegal move");
-        if(observation->lastMoveCapturedPiece)
-        // piece movement stopped prematurely, special moves like en_passant, castling and promotion are not possible here
         {
-            if(fromSquare==toSquareReal)
-                throw std::logic_error("Capture while no piece movement!");
-            if(castling)
-                throw std::logic_error("Castling can not capture piece!");
-            CIS::BoardClause pieceAtToSquare(toSquareReal,CIS::BoardClause::PieceType::any);
-            conditions.push_back(pieceAtToSquare);
+            toSquareReal = toSquareAim;
         }
         else
         {
-            if(fromSquare!=toSquareReal)
-                throw std::logic_error("Illegal move but movement and no capture!");
-            if(castling)
-            // enemy piece prevents castling
+            std::unordered_set<CIS::Square,CIS::Square::Hasher> previousStateSquareSet(previousStateMovePieces.begin(),previousStateMovePieces.end());
+            bool pieceMoved = false;
+            for(const CIS::Square& sq : currentStateMovePieces)
             {
-                CIS::ChessRow castlingRow = (selfColor==PieceColor::black)?CIS::ChessRow::eight:CIS::ChessRow::one;
-                std::vector<CIS::ChessColumn> castlingCol;
-                if(playerPiecesTracker.kingside && !selfObs.kingside)
-                    //move was castling to kingside
-                    castlingCol = {CIS::ChessColumn::F,CIS::ChessColumn::G};
-                else if(playerPiecesTracker.queenside && !selfObs.queenside)
-                    //mode was castling to queenside
-                    castlingCol = {CIS::ChessColumn::B,CIS::ChessColumn::C,CIS::ChessColumn::D};
-                else
-                    throw std::logic_error("Castling move but no castling rights!");
-                
-                CIS::BoardClause castlingClause;
-                for(CIS::ChessColumn col : castlingCol)
+                auto iter = previousStateSquareSet.find(sq);
+                if(iter==previousStateSquareSet.end())
                 {
-                    CIS::Square sq(col,castlingRow);
-                    castlingClause = castlingClause | CIS::BoardClause(sq,CIS::BoardClause::PieceType::none);
+                    //std::cout<<"Moved:"<<sq.to_string()<<std::endl;
+                    if(pieceMoved)
+                    {
+                        std::cout<<"Prev:";
+                        for(auto sq : previousStateMovePieces)
+                            std::cout<<" "<<sq.to_string();
+                        std::cout<<std::endl<<"Curr:";
+                        for(auto sq : currentStateMovePieces)
+                            std::cout<<" "<<sq.to_string();
+                        std::cout<<std::endl;
+                        throw std::logic_error("More than one piece of one type");
+                    }
+                    pieceMoved=true;
+                    toSquareReal = sq;
                 }
-                conditions.push_back(castlingClause);
             }
-            else if(initialMovePiece==CIS::PieceType::pawn)
-            // enemy piece prevents pawn movement
+            if(!pieceMoved)
+                toSquareReal = fromSquare;
+        }
+        //std::cout<<"toSquareReal:"<<toSquareReal.to_string()<<std::endl;
+        
+
+        std::vector<CIS::BoardClause> conditions;
+        if(observation->lastMoveIllegal)
+        {
+            if(promotion)
+                throw std::logic_error("Promotion can not be an illegal move");
+            if(observation->lastMoveCapturedPiece)
+            // piece movement stopped prematurely, special moves like en_passant, castling and promotion are not possible here
             {
-                if(fromSquare.column==toSquareAim.column)
-                // Failed forward move
+                if(fromSquare==toSquareReal)
+                    throw std::logic_error("Capture while no piece movement!");
+                if(castling)
+                    throw std::logic_error("Castling can not capture piece!");
+                CIS::BoardClause pieceAtToSquare(toSquareReal,CIS::BoardClause::PieceType::any);
+                conditions.push_back(pieceAtToSquare);
+            }
+            else
+            {
+                if(fromSquare!=toSquareReal)
+                    throw std::logic_error("Illegal move but movement and no capture!");
+                if(castling)
+                // enemy piece prevents castling
                 {
-                    CIS::Square squareBeforePawn = fromSquare;
-                    if(selfColor==PieceColor::white)
-                        squareBeforePawn.vertPlus(1);
+                    CIS::ChessRow castlingRow = (selfColor==PieceColor::black)?CIS::ChessRow::eight:CIS::ChessRow::one;
+                    std::vector<CIS::ChessColumn> castlingCol;
+                    if(playerPiecesTracker.kingside && !selfObs.kingside)
+                        //move was castling to kingside
+                        castlingCol = {CIS::ChessColumn::F,CIS::ChessColumn::G};
+                    else if(playerPiecesTracker.queenside && !selfObs.queenside)
+                        //mode was castling to queenside
+                        castlingCol = {CIS::ChessColumn::B,CIS::ChessColumn::C,CIS::ChessColumn::D};
                     else
-                        squareBeforePawn.vertMinus(1);
-                    conditions.push_back(CIS::BoardClause(squareBeforePawn,CIS::BoardClause::PieceType::any));
+                        throw std::logic_error("Castling move but no castling rights!");
+                    
+                    CIS::BoardClause castlingClause;
+                    for(CIS::ChessColumn col : castlingCol)
+                    {
+                        CIS::Square sq(col,castlingRow);
+                        castlingClause = castlingClause | CIS::BoardClause(sq,CIS::BoardClause::PieceType::none);
+                    }
+                    conditions.push_back(castlingClause);
+                }
+                else if(initialMovePiece==CIS::PieceType::pawn)
+                // enemy piece prevents pawn movement
+                {
+                    if(fromSquare.column==toSquareAim.column)
+                    // Failed forward move
+                    {
+                        CIS::Square squareBeforePawn = fromSquare;
+                        if(selfColor==PieceColor::white)
+                            squareBeforePawn.vertPlus(1);
+                        else
+                            squareBeforePawn.vertMinus(1);
+                        conditions.push_back(CIS::BoardClause(squareBeforePawn,CIS::BoardClause::PieceType::any));
+                    }
+                    else
+                    // Failed en_passant move
+                    {
+                        CIS::Square squareNextToPawn = {toSquareAim.column,fromSquare.row};
+                        CIS::BoardClause noPawnHere(squareNextToPawn,CIS::BoardClause::PieceType::pawn);
+                        noPawnHere = !noPawnHere;
+                        conditions.push_back(noPawnHere);
+                    }
                 }
                 else
-                // Failed en_passant move
+                {
+                    throw std::logic_error("Non castling and non pawn illegal move must be capturing!");
+                }
+            }
+        }
+        else
+        {
+            if(toSquareAim!=toSquareReal)
+                throw std::logic_error("Legal move but target and reality differs!");
+            if(observation->lastMoveCapturedPiece)
+            {
+                if(fromSquare==toSquareReal)
+                    throw std::logic_error("Capture while no piece movement!");
+                if(castling)
+                    throw std::logic_error("Castling can not capture piece!");
+                
+                if(initialMovePiece==CIS::PieceType::pawn)
+                // pawn captures piece in two possible ways
                 {
                     CIS::Square squareNextToPawn = {toSquareAim.column,fromSquare.row};
-                    CIS::BoardClause noPawnHere(squareNextToPawn,CIS::BoardClause::PieceType::pawn);
-                    noPawnHere = !noPawnHere;
-                    conditions.push_back(noPawnHere);
+                    CIS::BoardClause en_passantCapture(squareNextToPawn,CIS::BoardClause::PieceType::pawn);
+                    CIS::BoardClause conventionalCapture(toSquareReal,CIS::BoardClause::PieceType::any);
+                    conditions.push_back(en_passantCapture | conventionalCapture);
+                }
+                else
+                //capture by any other piece
+                {
+                    conditions.push_back(CIS::BoardClause(toSquareReal,CIS::BoardClause::PieceType::any));
                 }
             }
             else
             {
-                throw std::logic_error("Non castling and non pawn illegal move must be capturing!");
-            }
-        }
-    }
-    else
-    {
-        if(toSquareAim!=toSquareReal)
-            throw std::logic_error("Legal move but target and reality differs!");
-        if(observation->lastMoveCapturedPiece)
-        {
-            if(fromSquare==toSquareReal)
-                throw std::logic_error("Capture while no piece movement!");
-            if(castling)
-                throw std::logic_error("Castling can not capture piece!");
-            
-            if(initialMovePiece==CIS::PieceType::pawn)
-            // pawn captures piece in two possible ways
-            {
-                CIS::Square squareNextToPawn = {toSquareAim.column,fromSquare.row};
-                CIS::BoardClause en_passantCapture(squareNextToPawn,CIS::BoardClause::PieceType::pawn);
-                CIS::BoardClause conventionalCapture(toSquareReal,CIS::BoardClause::PieceType::any);
-                conditions.push_back(en_passantCapture | conventionalCapture);
-            }
-            else
-            //capture by any other piece
-            {
-                conditions.push_back(CIS::BoardClause(toSquareReal,CIS::BoardClause::PieceType::any));
-            }
-        }
-        else
-        {
-            if(initialMovePiece==CIS::PieceType::knight)
-            {
-                conditions.push_back(CIS::BoardClause(toSquareReal,CIS::BoardClause::PieceType::none));
-            }
-            else
-            {
-                auto [delta_col,delta_row] = fromSquare.diffToSquare(toSquareReal);
-                
-                enum Dir {Straight,Diagonal};
-                Dir movementDir;
-                if(fromSquare.row==toSquareReal.row || fromSquare.column==toSquareReal.column)
+                if(initialMovePiece==CIS::PieceType::knight)
                 {
-                    movementDir = Dir::Straight;
-                    if(delta_col!=0 && delta_row!=0)
-                        throw std::logic_error("Invalid movement difference!");
+                    conditions.push_back(CIS::BoardClause(toSquareReal,CIS::BoardClause::PieceType::none));
                 }
                 else
                 {
-                    movementDir = Dir::Diagonal;
-                    if(std::abs(delta_col)!=std::abs(delta_row))
-                        throw std::logic_error("Invalid movement difference!");
-                }
-                delta_col = (delta_col!=0)?delta_col/std::abs(delta_col):0;
-                delta_row = (delta_row!=0)?delta_row/std::abs(delta_row):0;
-                
-                CIS::Square squareIteration = fromSquare;
-                while(squareIteration!=toSquareReal)
-                {
-                    bool valid = squareIteration.moveSquare(delta_col,delta_row);
-                    if(!valid)
-                        throw std::logic_error("Piece can not move over invalid square");
-                    conditions.push_back(CIS::BoardClause(squareIteration,CIS::BoardClause::PieceType::none));
+                    auto [delta_col,delta_row] = fromSquare.diffToSquare(toSquareReal);
+                    
+                    enum Dir {Straight,Diagonal};
+                    Dir movementDir;
+                    if(fromSquare.row==toSquareReal.row || fromSquare.column==toSquareReal.column)
+                    {
+                        movementDir = Dir::Straight;
+                        if(delta_col!=0 && delta_row!=0)
+                            throw std::logic_error("Invalid movement difference!");
+                    }
+                    else
+                    {
+                        movementDir = Dir::Diagonal;
+                        if(std::abs(delta_col)!=std::abs(delta_row))
+                            throw std::logic_error("Invalid movement difference!");
+                    }
+                    delta_col = (delta_col!=0)?delta_col/std::abs(delta_col):0;
+                    delta_row = (delta_row!=0)?delta_row/std::abs(delta_row):0;
+                    
+                    CIS::Square squareIteration = fromSquare;
+                    while(squareIteration!=toSquareReal)
+                    {
+                        bool valid = squareIteration.moveSquare(delta_col,delta_row);
+                        if(!valid)
+                            throw std::logic_error("Piece can not move over invalid square");
+                        conditions.push_back(CIS::BoardClause(squareIteration,CIS::BoardClause::PieceType::none));
+                    }
                 }
             }
         }
-    }
+            
+        cis->markIncompatibleBoards(conditions);
+        cis->removeIncompatibleBoards();
         
-    cis->markIncompatibleBoards(conditions);
-    cis->removeIncompatibleBoards();
-
-//Undo action to state
-    rbcState->undo_action(evalInfo->bestMove);
+    //Undo action to state
+        rbcState->undo_action(evalInfo->bestMove);
+        
+    // Advance own state using move
+        playerPiecesTracker.applyMove(fromSquare,toSquareReal,initialMovePiece,promotionType,castling);
+    }
 }
 
 void RBCAgent::handleScanInfo
@@ -1923,46 +1830,43 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
     
     using CIS = ChessInformationSet;
     
-    std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
-    std::cout<<"cis->size():"<<cis->size()<<std::endl;    
+    //std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
+    //std::cout<<"cis->size():"<<cis->size()<<std::endl;    
 
     randomHypotheseSelect = std::uniform_int_distribution<std::uint64_t>(0,cis->size()-1);
     std::uint64_t selectedBoard = randomHypotheseSelect(gen);
-    std::cout<<"Selected Board:"<<selectedBoard<<std::endl;
+    //std::cout<<"Selected Board:"<<selectedBoard<<std::endl;
     auto iter = cis->begin();
-    std::cout<<"Created Iterator"<<std::endl;
-    std::cout<<"getCurrentIndex:"<<iter.getCurrentIndex()<<std::endl;
+    //std::cout<<"Created Iterator"<<std::endl;
+    //std::cout<<"getCurrentIndex:"<<iter.getCurrentIndex()<<std::endl;
     for(int i=0;i<selectedBoard;i++)
     {
-        std::cout<<"i:"<<i<<" selectedBoard:"<<selectedBoard<<std::endl;
         if(iter==cis->end())
             iter = cis->begin();
         else
             iter++;
     }
-    std::cout<<"Enter iterator"<<std::endl;
-    std::cout<<"getCurrentIndex:"<<iter.getCurrentIndex()<<std::endl;
+    //std::cout<<"Enter iterator"<<std::endl;
+    //std::cout<<"getCurrentIndex:"<<iter.getCurrentIndex()<<std::endl;
     if(iter == cis->end())
         throw std::logic_error("Chess information set is empty");
     std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,double>> selectedHypothese = *iter;
     
-    std::cout<<"cis->size():"<<cis->size()<<std::endl;
-    std::cout<<"selectedBoard:"<<selectedBoard<<std::endl;
+    //std::cout<<"cis->size():"<<cis->size()<<std::endl;
+    //std::cout<<"selectedBoard:"<<selectedBoard<<std::endl;
     
     auto fullInfoSet = std::make_unique<FullChessInfo>();
     
-    std::cout<<"selfColor:"<<selfColor<<std::endl;
+    //std::cout<<"selfColor:"<<selfColor<<std::endl;
     
     if(selfColor == PieceColor::white)
     {
-        std::cout<<"White"<<std::endl;
         fullInfoSet->white = playerPiecesTracker;
         fullInfoSet->black = selectedHypothese->first;
         fullInfoSet->nextTurn = PieceColor::white;
     }
     else
     {
-        std::cout<<"Black"<<std::endl;
         fullInfoSet->black = playerPiecesTracker;
         fullInfoSet->white = selectedHypothese->first;
         fullInfoSet->nextTurn = PieceColor::black;
@@ -1972,14 +1876,15 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
     fullInfoSet->lastMoveIllegal = false;
     fullInfoSet->nextCompleteTurn = currentTurn;
     
+    /*
     std::cout<<"fullInfoSet->black.kingside:"<<fullInfoSet->black.kingside<<std::endl;
     std::cout<<"fullInfoSet->black.queenside:"<<fullInfoSet->black.queenside<<std::endl;
     std::cout<<"fullInfoSet->white.kingside:"<<fullInfoSet->white.kingside<<std::endl;
     std::cout<<"fullInfoSet->white.queenside:"<<fullInfoSet->white.queenside<<std::endl;
     
     std::cout<<"fullInfoSet->nextTurn:"<<fullInfoSet->nextTurn<<std::endl;
-    
-    std::cout<<"Selected: "<<fullInfoSet->getFEN()<<std::endl;
+    */
+    std::cout<<"Selected as hypothese: "<<fullInfoSet->getFEN()<<std::endl;
     return fullInfoSet;
 }
 
@@ -2006,27 +1911,40 @@ void RBCAgent::stepForwardHypotheses()
     std::cout<<"Player "<<selfColor<<" advances its hypotheses of the opponents state"<<std::endl;
     
     cis->clearRemoved();
+    //std::cout<<"Clearing removed states of CIS"<<std::endl;
     auto newCis = std::make_unique<CIS>();
+    //std::cout<<"Creating new instance of CIS"<<std::endl;
+    
+    if(cis->size()<1 || cis->size()!=cis->validSize())
+        throw std::logic_error("Advancing hypotheses from invalid cis size");    
+    
+    std::vector<std::uint64_t> cisInds;
     for(auto iter=cis->begin(); iter!=cis->end(); iter++)
     {
-        CIS::OnePlayerChessInfo& hypoPiecesOpponent = (*iter)->first;
+        //std::cout<<"Iter:"<<std::endl;
+        std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,double>> oldHypothese = *iter;
+        CIS::OnePlayerChessInfo& hypoPiecesOpponent = oldHypothese->first;
         double probability = (*iter)->second;
         std::unique_ptr<std::vector<std::pair<CIS::OnePlayerChessInfo,double>>> newHypotheses;
         newHypotheses = generateHypotheses(hypoPiecesOpponent);
         for(auto& oneHypothese : *newHypotheses)
             oneHypothese.second = probability;
-        cis->remove(iter);
-        
+        //std::cout<<"Developed: "<<iter.getCurrentIndex()<<std::endl;
+        cisInds.push_back(iter.getCurrentIndex());
+        //std::cout<<"Removed"<<std::endl;
+
         try
         {
             newCis->add(*newHypotheses);
         }
         catch(const std::bad_alloc& e)
         {
+            cis->remove(cisInds);
             cis->clearRemoved();
             iter = cis->begin();
             newCis->add(*newHypotheses);
         }
     }
     cis = std::move(newCis);
+    std::cout<<"Player "<<selfColor<<" hypotheses generation done"<<std::endl;
 }

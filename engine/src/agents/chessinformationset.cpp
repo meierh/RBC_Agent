@@ -203,6 +203,7 @@ std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,double>> Chess
     const std::bitset<chessInfoSize>& bits
 ) const
 {
+    //std::cout<<"Decoding a bitset"<<std::endl;
     auto board = std::make_unique<std::pair<OnePlayerChessInfo,double>>();
     
     std::vector<std::vector<ChessInformationSet::Square>*> pieces = 
@@ -226,6 +227,7 @@ std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,double>> Chess
         }
         bitStartInd += 64;
     }
+    //std::cout<<"Set pieces"<<std::endl;
     
     board->first.kingside = bits[bitStartInd];
     bitStartInd++;
@@ -233,15 +235,24 @@ std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,double>> Chess
     board->first.queenside = bits[bitStartInd];
     bitStartInd++;
     
+    //std::cout<<"Set castling"<<std::endl;
+    
     for(std::uint8_t boardInd=0; boardInd<64; boardInd++)
     {
         std::uint16_t bitInd = bitStartInd+boardInd;
         if(bits[bitInd])
         {
-            board->first.en_passant.push_back(boardIndexToSquare(boardInd));
+            board->first.en_passant_valid = true;;
+            board->first.en_passant = boardIndexToSquare(boardInd);
+        }
+        else
+        {
+            board->first.en_passant_valid = false;;
         }
     }
     bitStartInd += 64;
+    
+    //std::cout<<"Set en_passant"<<std::endl;
     
     std::uint8_t& no_progress_count = board->first.no_progress_count;
     no_progress_count = transferBitPattern<std::uint8_t>(bits,bitStartInd,7);
@@ -255,6 +266,7 @@ std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,double>> Chess
     probability /= static_cast<double>(probabilityIntMax);
     board->second = probability;
     
+    //std:cout<<"Decoding done:"<<board.get()<<std::endl;
     return board;
 }
 
@@ -340,14 +352,16 @@ std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard
     bitBoard[bitStartInd] = piecesInfo.queenside;
     bitStartInd++;
     
-    std::function<bool(Square)> pieceCheck = piecesInfo.getBlockCheck(piecesInfo.en_passant,static_cast<CIS::PieceType>(0));
-    for(std::uint8_t boardInd=0; boardInd<64; boardInd++)
+    if(piecesInfo.en_passant_valid)
     {
-        CIS::Square sq = boardIndexToSquare(boardInd);
-        if(pieceCheck(sq))                
+        for(std::uint8_t boardInd=0; boardInd<64; boardInd++)
         {
-            std::uint16_t bitInd = bitStartInd+boardInd;
-            bitBoard[bitInd] = true;
+            CIS::Square sq = boardIndexToSquare(boardInd);
+            if(piecesInfo.en_passant_valid && piecesInfo.en_passant==sq)                
+            {
+                std::uint16_t bitInd = bitStartInd+boardInd;
+                bitBoard[bitInd] = true;
+            }
         }
     }
     bitStartInd += 64;
@@ -429,11 +443,11 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
 
         if(pieceData.queenside)
             cis_distribution->queenside += 1.0;
-        
+                
         std::array<double,64>& en_passantDist = cis_distribution->en_passant;
-        for(const CIS::Square& sq : pieceData.en_passant)
+        if(pieceData.en_passant_valid)
         {
-            unsigned int index = CIS::squareToBoardIndex(sq);
+            unsigned int index = CIS::squareToBoardIndex(pieceData.en_passant);
             en_passantDist[index] += 1.0;
         }
         
@@ -459,7 +473,6 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     
     return cis_distribution;    
 }
-
 
 void ChessInformationSet::add
 (
@@ -516,6 +529,174 @@ bool ChessInformationSet::evaluateHornClause
         value = value && oneClause(piecesInfo);
     }
     return value;
+}
+
+void ChessInformationSet::OnePlayerChessInfo::applyMove
+(
+    ChessInformationSet::Square from,
+    ChessInformationSet::Square to,
+    ChessInformationSet::PieceType pieceType,
+    ChessInformationSet::PieceType promPieceType,
+    bool castling
+)
+{
+    using CIS = ChessInformationSet;
+
+    //process possible promotion of pawn
+    if(promPieceType!=CIS::PieceType::empty)
+    {
+        if(castling)
+            throw std::logic_error("Castling and Promotion in one move not possible!");
+        if(pieceType!=CIS::PieceType::pawn)
+            throw std::logic_error("Non pawn piece can not be promoted!");
+        if(promPieceType==CIS::PieceType::pawn || promPieceType==CIS::PieceType::king)
+            throw std::logic_error("Piece can not be promoted to a pawn or a king!");
+        
+        std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> pawnGetter = getPieceIter(pawns);        
+        auto pawnIter = pawnGetter(from);
+        if(pawnIter==pawns.end())
+            throw std::logic_error("Pawn moves from position where it does not sit!");
+        
+        pawns.erase(pawnIter);
+        switch(promPieceType)
+        {
+            case CIS::PieceType::knight:
+                knights.push_back(to);
+                break;
+            case CIS::PieceType::bishop:
+                bishops.push_back(to);
+                break;
+            case CIS::PieceType::rook:
+                rooks.push_back(to);
+                break;
+            case CIS::PieceType::queen:
+                queens.push_back(to);
+                break;
+            default:
+                throw std::logic_error("Piece promoted to non valid piece type!");
+        }
+        no_progress_count=0;
+        return;
+    }
+
+    //process possible castling
+    if(castling)
+    {
+        enum Castling {queenside,kingside};
+        Castling side;
+        
+        if(pieceType!=CIS::PieceType::king)
+            throw std::logic_error("Castling but king not moved!");            
+        if(kings.size()!=1)
+            throw std::logic_error("There must be exactly one king!");
+        CIS::Square& theKing = kings[0];
+        theKing = to;
+        CIS::Square rookDest = to;
+        
+        if(from.column < to.column)
+        {
+            rookDest.horizMinus(1);
+            side = Castling::kingside;
+            if(!kingside)
+                throw std::logic_error("Castling move kingside but illegal!");
+        }
+        else if(from.column > to.column)
+        {
+            rookDest.horizPlus(1);               
+            side = Castling::queenside;
+            if(!queenside)
+                throw std::logic_error("Castling move queenside but illegal!");
+        }
+        else
+            throw std::logic_error("No movement in castling!");
+        
+        std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> rookGetter = getPieceIter(rooks);
+        auto rookIter = rooks.end();
+        if(side==Castling::kingside)
+            rookIter = rookGetter({CIS::ChessColumn::H,theKing.row});
+        else
+            rookIter = rookGetter({CIS::ChessColumn::A,theKing.row});            
+        if(rookIter==rooks.end())
+            throw std::logic_error("No rook on initial position in castling move!");
+
+        *rookIter = rookDest;
+        
+        this->kingside=false;
+        this->queenside=false;
+
+        return;
+    }
+
+    //process all other movement
+    if(pieceType==CIS::PieceType::pawn)
+    {
+        std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> pawnGetter = getPieceIter(pawns);
+        int step = static_cast<int>(to.row)-static_cast<int>(from.row);
+        uint stepSize = std::abs(step);
+        bool doubleStep = (stepSize==2)?true:false;
+        if(stepSize!=1 && stepSize!=2)
+            throw std::logic_error("Pawn must move eiter one or two steps forward!");
+        auto pawnIter = pawnGetter(from);
+        if(pawnIter==pawns.end())
+            throw std::logic_error("Moved pawn from nonexistant position!");
+        *pawnIter = to;
+        if(doubleStep)
+        {
+            CIS::Square en_passant_sq = from;
+            (step<0)?en_passant_sq.vertMinus(1):en_passant_sq.vertPlus(1);
+            en_passant_valid = true;
+            en_passant = en_passant_sq;
+        }
+    }
+    else if(pieceType==CIS::PieceType::rook)
+    {
+        std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> rookGetter = getPieceIter(rooks);
+        auto rookIter = rookGetter(from);
+        if(rookIter==rooks.end())
+            throw std::logic_error("Moved rook from nonexistant position!");
+        if(from.row==CIS::ChessRow::one || from.row==CIS::ChessRow::eight)
+        {
+            if(from.column==CIS::ChessColumn::A)
+                queenside=false;
+            if(from.column==CIS::ChessColumn::H)
+                kingside=false;
+        }
+        *rookIter = to;
+    }
+    else if(pieceType==CIS::PieceType::knight)
+    {
+        std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> knightGetter = getPieceIter(knights);
+        auto knightIter = knightGetter(from);
+        if(knightIter==knights.end())
+            throw std::logic_error("Moved knight from nonexistant position!");
+        *knightIter = to;
+    }
+    else if(pieceType==CIS::PieceType::bishop)
+    {
+        std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> bishopGetter = getPieceIter(bishops);
+        auto bishopIter = bishopGetter(from);
+        if(bishopIter==bishops.end())
+            throw std::logic_error("Moved bishop from nonexistant position!");
+        *bishopIter = to;
+    }
+    else if(pieceType==CIS::PieceType::queen)
+    {
+        std::function<std::vector<CIS::Square>::iterator(const CIS::Square&)> queenGetter = getPieceIter(queens);
+        auto queenIter = queenGetter(from);
+        if(queenIter==queens.end())
+            throw std::logic_error("Moved queen from nonexistant position!");
+        *queenIter = to; 
+    }
+    else if(pieceType==CIS::PieceType::king)
+    {
+        if(kings.size()!=1)
+            throw std::logic_error("There must be exactly one king!");
+        CIS::Square& theKing = kings[0];
+        theKing = to;
+        CIS::Square rookDest = to;
+        kingside=false;
+        queenside=false;
+    }
 }
 
 void ChessInformationSet::removeIncompatibleBoards()

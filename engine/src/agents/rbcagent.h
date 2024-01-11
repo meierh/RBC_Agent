@@ -207,7 +207,7 @@ private:
     (
         StateObj *pos
     );
-    
+       
     /**
      * @brief
      * @param pos

@@ -152,7 +152,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 bool queenside=true;
                 
                 // en-passent legal
-                std::vector<ChessInformationSet::Square> en_passant;
+                bool en_passant_valid=false;
+                ChessInformationSet::Square en_passant;
                 
                 // fifty move rule counter
                 std::uint8_t no_progress_count=0;
@@ -198,8 +199,12 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     equal &= compareVectors(kings,other.kings);
                     equal &= kingside==other.kingside;
                     equal &= queenside==other.queenside;
-                    equal &= compareVectors(en_passant,other.en_passant);
                     equal &= no_progress_count==other.no_progress_count;
+                    equal &= en_passant_valid==other.en_passant_valid;
+                    if(en_passant_valid)
+                    {
+                        equal &= en_passant==other.en_passant;
+                    }
                     return equal;
                 };
                 
@@ -222,7 +227,10 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     res += printPieces(kings,"k");
                     res += "Ck:"+std::to_string(kingside);
                     res += " Cq:"+std::to_string(queenside)+" ";
-                    res += printPieces(en_passant,"enPass");
+                    if(en_passant_valid)
+                        res += "ep ("+en_passant.to_string()+") ";
+                    else
+                        res += "ep (-) ";
                     res += std::to_string(no_progress_count);
                     return res;
                 };
@@ -231,6 +239,15 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     os<<opci.to_string();
                     return os;
                 }
+                
+                void applyMove
+                (
+                    ChessInformationSet::Square from,
+                    ChessInformationSet::Square to,
+                    ChessInformationSet::PieceType pieceType,
+                    ChessInformationSet::PieceType promPieceType,
+                    bool castling
+                );
                 
             private:
                 std::unordered_map<Square,PieceType,Square::Hasher> squareToPieceMap;
@@ -387,6 +404,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 double kingside;
                 double queenside;
             
+                double en_passant_valid;
                 std::array<double,64> en_passant;
             
                 double no_progress_count;
@@ -452,6 +470,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             double probability
         ) const;
 
+        friend class CIS_Iterator;
         
         class CIS_Iterator : public IS_Iterator
         {
@@ -469,12 +488,18 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     ChessInformationSet* cis
                 ):
                 IS_Iterator(cis),
-                cis(cis){};               
+                cis(cis){};
 
                 std::unique_ptr<std::pair<OnePlayerChessInfo,double>> operator*() const noexcept
                 {
+                    //std::cout<<" Enter iterator"<<std::endl;
                     std::unique_ptr<std::bitset<chessInfoSize>> bits = IS_Iterator::operator*();
-                    return cis->decodeBoard(*(IS_Iterator::operator*()));
+                    //std::cout<<" Got bitset"<<std::endl;
+                    auto info = cis->decodeBoard(*(IS_Iterator::operator*()));
+                    //std::cout<<"info->first: "<<&(info->first)<<std::endl;
+                    //std::cout<<"info->second:"<<&(info->second)<<std::endl;
+                    //std::cout<<" Return info"<<std::endl;
+                    return info;
                 };
                 
             protected:
@@ -491,12 +516,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         {
             return CIS_Iterator(this,this->size());
         };
-        
-        CIS_Iterator remove(CIS_Iterator iter)
-        {
-            return remove(iter);
-        };
-        
+                
     private:
         std::queue<std::uint64_t> incompatibleBoards;
         

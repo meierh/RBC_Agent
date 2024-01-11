@@ -154,9 +154,10 @@ public:
     void init(int variant, bool isChess960);
     
     std::string ActionToMoveString(Action action, open_spiel::chess::Color actor);
-    std::pair<std::uint8_t,open_spiel::chess::Move> ActionToIncompleteMove(Action action, open_spiel::chess::Color actor);
+    std::tuple<std::uint8_t,open_spiel::chess::Move,bool> ActionToIncompleteMove(Action action, open_spiel::chess::Color actor);
     open_spiel::chess::Color currentPlayer();
     open_spiel::rbc::MovePhase currentPhase() const;
+    std::string ToString();
 };
 
 #endif // OPENSPIELSTATE_H
