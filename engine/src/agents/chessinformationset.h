@@ -111,8 +111,10 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 std::pair<std::int8_t,std::int8_t> diffToSquare(const Square& sq);
                 bool moveSquare(std::int8_t deltaCol, std::int8_t deltaRow);                
         };
+        /*
         enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
                           rook1=8,knight1=9,bishop1=10,queen=11,king=12,bishop2=13,knight2=14,rook2=15};
+                          */
         enum class PieceType : std::uint8_t {pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5,empty=6,unknown=7};
         static PieceType OpenSpielPieceType_to_CISPieceType(const open_spiel::chess::PieceType os_pT);
         static open_spiel::chess::PieceType CISPieceType_to_OpenSpielPieceType(const PieceType cis_pT);
@@ -136,6 +138,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             return y*8+x;
         };
         
+        class BoardClause;
         class OnePlayerChessInfo
         {
             public:
@@ -248,6 +251,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     ChessInformationSet::PieceType promPieceType,
                     bool castling
                 );
+                
+                bool evaluateHornClause(const std::vector<BoardClause>& hornClause);
                 
             private:
                 std::unordered_map<Square,PieceType,Square::Hasher> squareToPieceMap;
@@ -423,7 +428,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          */
         void markIncompatibleBoards(const std::vector<BoardClause>& conditions);
         
-        bool evaluateHornClause(const std::vector<BoardClause>& hornClause, OnePlayerChessInfo& piecesInfo);
+        //bool evaluateHornClause(const std::vector<BoardClause>& hornClause, OnePlayerChessInfo& piecesInfo);
         
         void removeIncompatibleBoards();
         

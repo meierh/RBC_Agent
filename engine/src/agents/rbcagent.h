@@ -81,7 +81,14 @@ private:
             std::string getFEN() const
             {
                 return getFEN(this->white,this->black,nextTurn,nextCompleteTurn);
-            };      
+            };
+            
+            static void check
+            (
+                const CIS::OnePlayerChessInfo& white,
+                const CIS::OnePlayerChessInfo& black,
+                std::string lastAction=""
+            );
             
             static std::array<std::pair<CIS::PieceType,PieceColor>,64> decodeFENFigurePlacement(std::string);
             
@@ -156,7 +163,8 @@ public:
     (
         ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
         ChessInformationSet::OnePlayerChessInfo& piecesSelf,
-        const PieceColor selfColor
+        const PieceColor selfColor,
+        const std::vector<ChessInformationSet::BoardClause> conditions = {}
     ) const;
 
 private:
@@ -167,7 +175,8 @@ private:
      */
     std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> generateHypotheses
     (
-        ChessInformationSet::OnePlayerChessInfo& piecesOpponent
+        ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
+        const std::vector<ChessInformationSet::BoardClause> conditions = {}
     );
     
     /**
@@ -248,7 +257,7 @@ private:
     /**
      * @brief
      */
-    void stepForwardHypotheses();
+    //void stepForwardHypotheses();
     
     FRIEND_TEST(rbcagentfullchessinfo_test, FEN_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, FENReconstruction_test);

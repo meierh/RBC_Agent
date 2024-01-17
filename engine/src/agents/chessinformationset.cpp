@@ -171,6 +171,19 @@ std::function<std::vector<ChessInformationSet::Square>::iterator(const ChessInfo
         };
 }
 
+bool ChessInformationSet::OnePlayerChessInfo::evaluateHornClause
+(
+    const std::vector<ChessInformationSet::BoardClause>& hornClause
+)
+{
+    bool value = true;
+    for(const BoardClause& oneClause : hornClause)
+    {
+        value = value && oneClause(*this);
+    }
+    return value;
+}
+
 void ChessInformationSet::setBoard
 (
     ChessInformationSet::OnePlayerChessInfo& pieces,
@@ -511,25 +524,25 @@ void ChessInformationSet::markIncompatibleBoards
     {
         board = *iter;
         OnePlayerChessInfo& piecesInfo = board->first;
-        
-        if(!evaluateHornClause(conditions,piecesInfo))
+        if(!piecesInfo.evaluateHornClause(conditions))
             incompatibleBoards.push(iter.getCurrentIndex());
     }
 }
 
+/*
 bool ChessInformationSet::evaluateHornClause
 (
-    const std::vector<BoardClause>& hornClause,
-    OnePlayerChessInfo& piecesInfo
+    const std::vector<BoardClause>& hornClause
 )
 {
     bool value = true;
     for(const BoardClause& oneClause : hornClause)
     {
-        value = value && oneClause(piecesInfo);
+        value = value && oneClause(*this);
     }
     return value;
 }
+*/
 
 void ChessInformationSet::OnePlayerChessInfo::applyMove
 (

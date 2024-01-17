@@ -200,7 +200,8 @@ int OpenSpielState::side_to_move() const
     // MoveNumber() assumes to be the number of plies and not chess moves.
     
     // TODO: MoveNumber no longer available
-    return spielState->MoveNumber() % 3;
+    //std::cout<<"spielState->MoveNumber():"<<spielState->MoveNumber()<<std::endl;
+    return spielState->MoveNumber() % 2;
 }
 
 Key OpenSpielState::hash_key() const
