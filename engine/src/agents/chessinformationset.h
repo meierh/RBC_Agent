@@ -160,6 +160,9 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 
                 // fifty move rule counter
                 std::uint8_t no_progress_count=0;
+                
+                // store necessary condition of a last move on opponent
+                std::vector<BoardClause> lastMoveOpponentConditions;
 
                 std::function<bool(const ChessInformationSet::Square&)> getBlockCheck();
                 std::function<bool(const ChessInformationSet::Square&)> getBlockCheck
@@ -253,6 +256,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 );
                 
                 bool evaluateHornClause(const std::vector<BoardClause>& hornClause);
+                
+                bool removePieceAt(ChessInformationSet::Square sq);
                 
             private:
                 std::unordered_map<Square,PieceType,Square::Hasher> squareToPieceMap;

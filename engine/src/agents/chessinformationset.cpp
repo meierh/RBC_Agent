@@ -184,6 +184,52 @@ bool ChessInformationSet::OnePlayerChessInfo::evaluateHornClause
     return value;
 }
 
+bool ChessInformationSet::OnePlayerChessInfo::removePieceAt
+(
+    ChessInformationSet::Square sq
+)
+{
+    std::function<std::pair<bool,PieceType>(const ChessInformationSet::Square&)> squareToPiece = getSquarePieceTypeCheck();
+    std::pair<bool,PieceType> piece = squareToPiece(sq);
+    
+    if(!piece.first)
+        return false;
+    
+    std::vector<ChessInformationSet::Square>* pieceTypeList;
+    switch (piece.second)
+    {
+        case PieceType::pawn:
+            pieceTypeList = &pawns;
+            break;
+        case PieceType::knight:
+            pieceTypeList = &knights;
+            break;
+        case PieceType::bishop:
+            pieceTypeList = &bishops;
+            break;
+        case PieceType::rook:
+            pieceTypeList = &rooks;
+            break;
+        case PieceType::queen:
+            pieceTypeList = &queens;
+            break;
+        case PieceType::king:
+            pieceTypeList = &kings;
+            break;
+        default:
+            throw std::logic_error("Non valid piece type");
+    }
+    
+    std::function<std::vector<ChessInformationSet::Square>::iterator(const ChessInformationSet::Square&)> pieceIter = getPieceIter(*pieceTypeList);
+    
+    auto iter = pieceIter(sq);
+    if(iter==pieceTypeList->end())
+        throw std::logic_error("Error");
+    
+    pieceTypeList->erase(iter);    
+    return true;
+}
+
 void ChessInformationSet::setBoard
 (
     ChessInformationSet::OnePlayerChessInfo& pieces,
@@ -554,6 +600,7 @@ void ChessInformationSet::OnePlayerChessInfo::applyMove
 )
 {
     using CIS = ChessInformationSet;
+    lastMoveOpponentConditions.clear();
 
     //process possible promotion of pawn
     if(promPieceType!=CIS::PieceType::empty)
@@ -610,15 +657,21 @@ void ChessInformationSet::OnePlayerChessInfo::applyMove
         {
             rookDest.horizMinus(1);
             side = Castling::kingside;
-            if(!kingside)
+            if(!this->kingside)
+            {
+                std::cout<<to_string()<<std::endl;
                 throw std::logic_error("Castling move kingside but illegal!");
+            }
         }
         else if(from.column > to.column)
         {
             rookDest.horizPlus(1);               
             side = Castling::queenside;
-            if(!queenside)
+            if(!this->queenside)
+            {
+                std::cout<<to_string()<<std::endl;
                 throw std::logic_error("Castling move queenside but illegal!");
+            }
         }
         else
             throw std::logic_error("No movement in castling!");
@@ -636,6 +689,19 @@ void ChessInformationSet::OnePlayerChessInfo::applyMove
         
         this->kingside=false;
         this->queenside=false;
+        
+        std:uint8_t castlingRow = static_cast<std::uint8_t>(from.row);
+        std::vector<CIS::Square> necessaryEmpty;
+        if(side==Castling::kingside)
+        {
+            necessaryEmpty = {CIS::Square(5,castlingRow),CIS::Square(6,castlingRow)};
+        }
+        else
+        {
+            necessaryEmpty = {CIS::Square(1,castlingRow),CIS::Square(2,castlingRow),CIS::Square(3,castlingRow)};
+        }
+        for(const CIS::Square& sq : necessaryEmpty)
+            lastMoveOpponentConditions.push_back(BoardClause(sq,BoardClause::PieceType::none));
 
         return;
     }
@@ -653,12 +719,17 @@ void ChessInformationSet::OnePlayerChessInfo::applyMove
         if(pawnIter==pawns.end())
             throw std::logic_error("Moved pawn from nonexistant position!");
         *pawnIter = to;
+        en_passant_valid = false;
         if(doubleStep)
         {
             CIS::Square en_passant_sq = from;
             (step<0)?en_passant_sq.vertMinus(1):en_passant_sq.vertPlus(1);
             en_passant_valid = true;
             en_passant = en_passant_sq;
+        }
+        else if(static_cast<int>(to.column) != static_cast<int>(from.column))
+        {
+            lastMoveOpponentConditions.push_back(BoardClause(to,BoardClause::PieceType::any));
         }
     }
     else if(pieceType==CIS::PieceType::rook)

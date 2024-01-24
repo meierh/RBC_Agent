@@ -644,24 +644,22 @@ void CrazyAra::rbcTest()
     EvalInfo evalInfo;
     Result gameResult;
 
-    RBCAgent* activePlayer;
-    RBCAgent* passivePlayer;
+    RBCAgent* activePlayer = whitePlayer.get();
+    RBCAgent* passivePlayer = blackPlayer.get();
+    RBCAgent* temp;
+    std::uint64_t halfMoveCounter = 0;
+    std::uint64_t nextFullMove = 1;
     do {
+        std::cout<<std::endl;
         searchLimits.startTime = now();
+        halfMoveCounter++;
         
-        // Set player sides
-        if (state->side_to_move() == WHITE)
-        {
-            activePlayer = whitePlayer.get();
-            passivePlayer = blackPlayer.get();
-        }
+        // Print player sides
+        if (activePlayer == whitePlayer.get())
+            std::cout<<"Active Player: white"<<std::endl;
         else
-        {
-            activePlayer = blackPlayer.get();
-            passivePlayer = whitePlayer.get();
-        }
+            std::cout<<"Active Player: black"<<std::endl;
         
-        //
         activePlayer->set_search_settings(state.get(), &searchLimits, &evalInfo);
         activePlayer->perform_action();
         activePlayer->apply_move_to_tree(evalInfo.bestMove, true);
@@ -687,8 +685,19 @@ void CrazyAra::rbcTest()
             }
         }
         gamePGN.gameMoves.emplace_back(sanMove);
-        std::cout<<"------------------- half Turn of:"<<activePlayer->getColor()<<"done ---------------------"<<std::endl;
-        throw std::runtime_error("Temp Stop");
+        temp = activePlayer;
+        activePlayer = passivePlayer;
+        passivePlayer = temp;
+        
+        if(halfMoveCounter%2 == 0)
+            nextFullMove++;
+        
+        std::cout<<"|||||||||||||||||||||||||||||| half Turn of:"<<activePlayer->getColor()<<" done||||||||||||||||||||||||||||||||"<<std::endl;
+        std::cout<<"    State fen:"<<state->ToString()<<std::endl;
+        std::cout<<"RBCAgents fen:"<<RBCAgent::combinedAgentsFEN(*whitePlayer,*blackPlayer,activePlayer->getColor(),nextFullMove)<<std::endl<<std::endl;
+        
+
+        //throw std::runtime_error("Temp Stop");
     }
     while(gameResult == NO_RESULT);
     //set_game_result_to_pgn(gameResult);

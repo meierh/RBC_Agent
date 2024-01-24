@@ -44,6 +44,13 @@ class RBCAgent : public MCTSAgent
     
 public:
     enum PieceColor {white=0,black=1,empty=-1};
+    static std::string combinedAgentsFEN
+    (
+        const RBCAgent& white,
+        const RBCAgent& black,
+        const PieceColor nextTurn,
+        const unsigned int nextCompleteTurn
+    );
     
 private:   
     enum Player {Self, Opponent};
