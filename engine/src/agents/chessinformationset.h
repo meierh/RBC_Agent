@@ -35,6 +35,7 @@
 #include <limits>
 #include "informationset.h"
 #include <functional>
+#include <stdint.h>
 
 #include "../environments/open_spiel/openspielstate.h"
 
@@ -394,6 +395,11 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     return result;
                 }
                 
+                void to_bits
+                (
+                    std::vector<std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>>& bits
+                ) const;
+                
                 FRIEND_TEST(chessinformationsetboardclause_test, constructor_test);
                 FRIEND_TEST(chessinformationsetboardclause_test, orOperator_test);
                 FRIEND_TEST(chessinformationsetboardclause_test, notOperator_test);
@@ -432,6 +438,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          * @param knownPieces
          */
         void markIncompatibleBoards(const std::vector<BoardClause>& conditions);
+        void markIncompatibleBoardsGPU(const std::vector<BoardClause>& conditions);
         
         //bool evaluateHornClause(const std::vector<BoardClause>& hornClause, OnePlayerChessInfo& piecesInfo);
         

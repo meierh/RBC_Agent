@@ -99,6 +99,12 @@ if (USE_DYNAMIC_NN_ARCH)
     add_definitions(-DDYNAMIC_NN_ARCH)
 endif()
 
+find_package(CUDAToolkit REQUIRED)
+find_package(Threads REQUIRED)
+enable_language(CUDA)
+#set_target_properties(OpenSpielAra PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
+#set_target_properties(OpenSpielAra PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON) 
+
 # -pg performance profiling flags
 if (USE_PROFILING)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
@@ -138,6 +144,7 @@ file(GLOB source_files
     "src/util/*.h"
     "src/util/*.cpp"
     "src/agents/*.cpp"
+    "src/agents/*.cu"
     "src/agents/*.h"
     "src/agents/config/*.cpp"
     "src/agents/config/*.h"
@@ -154,6 +161,7 @@ file(GLOB source_files
     "tests/*.h"
     "tests/*.cpp"
 )
+#message(STATUS ${source_files})
 
 set(CPP_PACKAGE_INCLUDE_DIR $ENV{MXNET_PATH}/cpp-package/include)
 file(GLOB_RECURSE CPP_PACKAGE_HEADERS

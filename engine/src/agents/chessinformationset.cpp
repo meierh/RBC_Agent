@@ -329,6 +329,56 @@ std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,double>> Chess
     return board;
 }
 
+void ChessInformationSet::BoardClause::to_bits
+(
+    std::vector<std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>>& bits
+) const
+{
+    bits.resize(literalNbr);
+    for(uint literalInd=0; literalInd<literalNbr; literalInd++)
+    {
+        std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>& oneClause = bits[literalInd];
+        std::array<std::uint8_t,48>* demandPieces;
+        std::array<std::uint8_t,48>* demandNonPieces;
+        if(conditionBool[literalInd])
+        {
+            demandPieces = &(oneClause.first);
+            demandNonPieces = &(oneClause.second);
+        }
+        else
+        {
+            demandPieces = &(oneClause.second);
+            demandNonPieces = &(oneClause.first);
+        }
+        
+        std::uint8_t squareboardIndex = squareToBoardIndex(boardPlaces[literalInd]);
+        std::uint8_t squarebyteIndex = squareboardIndex/8;
+        std::uint8_t squarebitIndex = squareboardIndex%8;
+        if(boardPlaceTypes[literalInd]==PieceType::none)
+        {
+            for(std::uint8_t pieceTypeIndex=0; pieceTypeIndex<6; pieceTypeIndex++)
+            {
+                std::uint8_t globalIndex = pieceTypeIndex*8+squarebyteIndex;
+                (*demandNonPieces)[globalIndex] |= (1<<(8-1-squarebitIndex));
+            }
+        }
+        else if(boardPlaceTypes[literalInd]==PieceType::any)
+        {
+            for(std::uint8_t pieceTypeIndex=0; pieceTypeIndex<6; pieceTypeIndex++)
+            {
+                std::uint8_t globalIndex = pieceTypeIndex*8+squarebyteIndex;
+                (*demandPieces)[globalIndex] |= (1<<(8-1-squarebitIndex));
+            }
+        }
+        else
+        {
+            std::uint8_t pieceTypeIndex = static_cast<std::uint8_t>(boardPlaceTypes[literalInd]);
+            std::uint8_t globalIndex = pieceTypeIndex*8+squarebyteIndex;
+            (*demandPieces)[globalIndex] |= (1<<(8-1-squarebitIndex));
+        }
+    }
+}
+
 double ChessInformationSet::Distribution::getProbability
 (
     const ChessInformationSet::Square& sq,
@@ -574,21 +624,6 @@ void ChessInformationSet::markIncompatibleBoards
             incompatibleBoards.push(iter.getCurrentIndex());
     }
 }
-
-/*
-bool ChessInformationSet::evaluateHornClause
-(
-    const std::vector<BoardClause>& hornClause
-)
-{
-    bool value = true;
-    for(const BoardClause& oneClause : hornClause)
-    {
-        value = value && oneClause(*this);
-    }
-    return value;
-}
-*/
 
 void ChessInformationSet::OnePlayerChessInfo::applyMove
 (

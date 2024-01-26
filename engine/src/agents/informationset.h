@@ -642,6 +642,8 @@ class InformationSet
             remove(iterator.getCurrentIndex());
         };
         */
+        
+        std::uint8_t* getInfoSetPtr(){return infoSet.get();}
 
     private:
         std::unique_ptr<std::uint8_t[]> infoSet;

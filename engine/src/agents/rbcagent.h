@@ -85,6 +85,16 @@ private:
                 const unsigned int nextCompleteTurn
             );
             
+            static void getAllFEN_GPU
+            (
+                const CIS::OnePlayerChessInfo& self,
+                Player selfColor,
+                std::unique_ptr<ChessInformationSet>& cis,
+                const PieceColor nextTurn,
+                const unsigned int nextCompleteTurn,
+                std::vector<std::string> allFEN
+            );
+            
             std::string getFEN() const
             {
                 return getFEN(this->white,this->black,nextTurn,nextCompleteTurn);
