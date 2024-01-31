@@ -5,16 +5,6 @@
 
 namespace crazyara {
 
-void CHECK(cudaError_t cuError)
-{
-    if(cuError!=cudaSuccess)
-    {   
-        std::string cudaErrorString(cudaGetErrorString(cuError));
-        std::cout<<"CUDA Error: "<<cudaErrorString<<std::endl;
-        throw std::logic_error("CUDA Fail");
-    }
-}
-
 __device__ bool getBit
 (
     uint8_t byte,
@@ -24,30 +14,219 @@ __device__ bool getBit
     return byte & (1 << position);
 }
 
+__device__ void numberToChar
+(
+    char** string,
+    uint16_t number 
+)
+{
+    bool startedWriting = false;
+    for(uint16_t decimal = 10000; decimal>0; decimal /= 10)
+    {
+        uint16_t firstDigit = number / decimal;
+        uint16_t remainingDigits = number % decimal;
+        **string = '0'+firstDigit;
+        if(firstDigit!=0)
+        {
+            *string = *string + 1;
+        }
+        else
+        {
+            if(startedWriting)
+                *string = *string + 1;
+        }
+        startedWriting = startedWriting || (firstDigit!=0);
+        number = remainingDigits;
+    }
+}
+
 __global__ void genFEN
 (
+    
     uint8_t* selfBoardInfoSet, // 6*64 pieces + 2*1 castling + 64 en_passant + 7 halfmove + 7 prob (in bits)
+    char selfPieceCharSet[6], // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
+    char selfColor, // w or b
     uint8_t* opponentBoardInfoSet, // 6*64 pieces + 2*1 castling + 64 en_passant + 7 halfmove + 7 prob (in bits)
+    char opponentPieceCharSet[6], // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
+    char turnColor, // w or b
     uint64_t boardInfoSetSize,
+    uint16_t nextMoveNumber,
     char* fenVector // 100 byte per Item    
 )
-{    
+{   
     unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
     if(index < boardInfoSetSize)
     {
+        __shared__ uint8_t selfBoard[58];
+        __shared__ char selfPiecesChar[6];
         uint8_t oppoBoard[58];
-        uint8_t selfBoard[58];
+        __shared__ char oppoPiecesChar[6];
         for(uint8_t byteInd=0; byteInd<58; byteInd++)
         {
-            oppoBoard[byteInd] = opponentBoardInfoSet[index*58+byteInd];
             selfBoard[byteInd] = selfBoardInfoSet[byteInd];
+            oppoBoard[byteInd] = opponentBoardInfoSet[index*58+byteInd];
         }
-        uint64_t* oppoPieces = oppoBoard;
-        uint64_t* selfPieces = selfBoard;
+        for(uint8_t pieceInd=0; pieceInd<6; pieceInd++)
+        {
+            selfPiecesChar[pieceInd] = selfPieceCharSet[pieceInd];
+            oppoPiecesChar[pieceInd] = opponentPieceCharSet[pieceInd];
+        }
         
+        char oneFenString[100];
+        char* strFenIndex = oneFenString;
+        
+        // Print pieces
+        for(int8_t row=7; row>=0; row--)
+        {
+            char rowString[8]; //[a-h]
+            for(uint8_t col=0; col<8; col++)
+            {
+                uint8_t squareByteInd = row;
+                uint8_t squareBitInd = col;
+                char squareItem = 1;
+                for(uint8_t pieceInd=0; pieceInd<6; pieceInd++)
+                {
+                    uint8_t pieceByteOffset = pieceInd*8;
+                    
+                    uint8_t* selfPieceTypeStart = selfBoard + pieceByteOffset;
+                    uint8_t* selfPieceTypeRowByte = selfPieceTypeStart + squareByteInd;
+                    bool selfPieceOnSquare = getBit(*selfPieceTypeRowByte,8-1-squareBitInd);
+                    squareItem = selfPieceOnSquare*((squareItem!=1)?'X':selfPiecesChar[pieceInd]) +
+                                !selfPieceOnSquare*squareItem;
+                    
+                    uint8_t* oppoPieceTypeStart = oppoBoard + pieceByteOffset;
+                    uint8_t* oppoPieceTypeRowByte = oppoPieceTypeStart + squareByteInd;
+                    bool oppoPieceOnSquare = getBit(*oppoPieceTypeRowByte,8-1-squareBitInd);
+                    squareItem = oppoPieceOnSquare*((squareItem!=1)?'X':oppoPiecesChar[pieceInd]) +
+                                !oppoPieceOnSquare*squareItem;
+                }
+                rowString[col] = squareItem;
+            }
+            uint8_t space = 0;
+            for(uint8_t col=0; col<8; col++)
+            {
+                if(rowString[col]!=1)
+                {
+                    if(space!=0)
+                    {
+                        *strFenIndex = space+48;
+                        strFenIndex++;
+                    }
+                    *strFenIndex = rowString[col];
+                    strFenIndex++;
+                }
+                space = (rowString[col]==1)*(space+1) + (rowString[col]!=1)*0;
+            }
+            if(space!=0)
+            {
+                *strFenIndex = space+48;
+                strFenIndex++;
+            }
+            if(row>0)
+            {
+                *strFenIndex = '/';
+                strFenIndex++;
+            }
+        }
+        
+        *strFenIndex = ' ';
+        strFenIndex++;
+        
+        //Print turn color
+        *strFenIndex = turnColor;
+        strFenIndex++;
+        
+        *strFenIndex = ' ';
+        strFenIndex++;
+        char* strFenIndexPreCastling = strFenIndex;
+        
+        //Print castling rights
+        uint8_t* castlingWhite = (selfColor=='w')?(selfBoard+48):(oppoBoard+48);        
+        bool castlingWhiteKingside = getBit(*castlingWhite,7);
+        *strFenIndex = 'K';
+        if(castlingWhiteKingside)
+            strFenIndex++;
+        bool castlingWhiteQueenside = getBit(*castlingWhite,6);
+        *strFenIndex = 'Q';
+        if(castlingWhiteQueenside)
+            strFenIndex++;
+        
+        uint8_t* castlingBlack = (selfColor=='w')?(oppoBoard+48):(selfBoard+48);
+        bool castlingBlackKingside = getBit(*castlingBlack,7);
+        *strFenIndex = 'k';
+        if(castlingBlackKingside)
+            strFenIndex++;
+        bool castlingBlackQueenside = getBit(*castlingBlack,6);
+        *strFenIndex = 'q';
+        if(castlingBlackQueenside)
+            strFenIndex++;
+        
+        if(strFenIndex==strFenIndexPreCastling)
+        {
+            *strFenIndex = '-';
+            strFenIndex++;
+        }
+        
+        *strFenIndex = ' ';
+        strFenIndex++;
+        
+        //En passant
+        uint8_t* enPassant = (turnColor==selfColor)?(oppoBoard+48):(selfBoard+48);
+        uint8_t offset = 2;
+        char enPas[2] = {'-',' '};
+        for(uint8_t row=0; row<8; row--)
+        {
+            for(uint8_t col=0; col<8; col++)
+            {
+                uint8_t totalBitInd = (row*8)+col;
+                uint8_t byte_offset = (totalBitInd+offset)/8;
+                uint8_t bit_Ind = (totalBitInd+offset)%8;
+                uint8_t readByte = *(enPassant+byte_offset);
+                bool validEnPassant = getBit(readByte,7-bit_Ind);
+                bool doubleMatch = (validEnPassant && enPas[0]!='-');
+                enPas[0] = doubleMatch*'X' + !doubleMatch*enPas[0];
+                enPas[0] = validEnPassant*(col+'a') + !validEnPassant*enPas[0];
+                enPas[1] = validEnPassant*(row+'1') + !validEnPassant*enPas[1];
+            }
+        }
+        *strFenIndex = enPas[0];
+        strFenIndex++;
+        *strFenIndex = enPas[1];
+        if(enPas[1]!=' ')
+            strFenIndex++;
+        *strFenIndex = ' ';
+
+        //Halfmove number
+        uint8_t* selfHalfMoveNumPtr = selfBoard+56;
+        uint8_t selfHalfMoveNum = *selfHalfMoveNumPtr;
+        selfHalfMoveNum = selfHalfMoveNum << 1;
+        selfHalfMoveNum &= 127;
+        bool selfHalfMoveNumLastBit = ((*(selfHalfMoveNumPtr+1))&128);
+        selfHalfMoveNum = selfHalfMoveNumLastBit*(selfHalfMoveNum+1) + !selfHalfMoveNumLastBit*selfHalfMoveNum;
+        
+        uint8_t* oppoHalfMoveNumPtr = oppoBoard+56;
+        uint8_t oppoHalfMoveNum = *oppoHalfMoveNumPtr;
+        oppoHalfMoveNum = oppoHalfMoveNum << 1;
+        oppoHalfMoveNum &= 127;
+        bool oppoHalfMoveNumLastBit = ((*(oppoHalfMoveNumPtr+1))&128);
+        oppoHalfMoveNum = oppoHalfMoveNumLastBit*(oppoHalfMoveNum+1) + !oppoHalfMoveNumLastBit*oppoHalfMoveNum;
+       
+        uint8_t halfMoveNum = (selfHalfMoveNum<oppoHalfMoveNum)?selfHalfMoveNum:oppoHalfMoveNum;
+        numberToChar(&strFenIndex,halfMoveNum);
+        
+        *strFenIndex = ' ';
+        strFenIndex++;
+        
+        numberToChar(&strFenIndex,nextMoveNumber);
+        
+        *strFenIndex = '\0';
+        strFenIndex++;        
         
         char* thisFen = fenVector+(index*100);
-
+        for(uint8_t i=0; i<100; i++)
+        {
+            *(thisFen+i) = oneFenString[i];
+        }
     }
 }
 

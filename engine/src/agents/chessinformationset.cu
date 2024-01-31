@@ -27,6 +27,15 @@ __device__ bool evaluateLiteral
     return (sum==0)?true:false;
 }
 
+__device__ bool CISgetBit
+(
+    uint8_t byte,
+    uint8_t position
+)
+{
+    return byte & (1 << position);
+}
+
 __global__ void checkConditions
 (
     uint8_t numberOfConditions,
@@ -92,6 +101,21 @@ void ChessInformationSet::markIncompatibleBoardsGPU
     for(auto clause : conditions)
         std::cout<<clause.to_string()<<"&&";
     std::cout<<std::endl;
+    
+    std::unique_ptr<std::vector<std::uint8_t>> incompatibleBoard = getIncompatibleBoardsGPU(conditions);
+    std::for_each(incompatibleBoard->begin(),incompatibleBoard->end(),
+                  [&](std::uint8_t boardIndex){incompatibleBoards.push(boardIndex);});
+}
+
+std::unique_ptr<std::vector<std::uint8_t>> ChessInformationSet::getIncompatibleBoardsGPU
+(
+    const std::vector<BoardClause>& conditions
+)
+{
+    std::cout<<"Mark boards that do not fit: ";
+    for(auto clause : conditions)
+        std::cout<<clause.to_string()<<"&&";
+    std::cout<<std::endl;
 
     std::vector<std::vector<std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>>> hostBitwiseCondition;
     hostBitwiseCondition.resize(conditions.size());
@@ -99,7 +123,7 @@ void ChessInformationSet::markIncompatibleBoardsGPU
     std::vector<std::uint8_t> hostClausesPerCondition(numberOfConditions);
     if(numberOfConditions>25)
         throw std::logic_error("There must maximal 25 conditions");
-    for(uint conditionInd=0; conditionInd<conditions.size(); conditionInd++)
+    for(uint conditionInd=0; conditionInd<numberOfConditions; conditionInd++)
     {
         conditions[conditionInd].to_bits(hostBitwiseCondition[conditionInd]);
         hostClausesPerCondition[conditionInd] = hostBitwiseCondition[conditionInd].size();
@@ -107,17 +131,20 @@ void ChessInformationSet::markIncompatibleBoardsGPU
             throw std::logic_error("There must only be 2 clauses per condition");
     }
     
+    std::cout<<"numberOfConditions:"<<int(numberOfConditions)<<std::endl;
+    
     uint8_t* deviceClausesPerCondition;
     CHECK(cudaMalloc((void**)&deviceClausesPerCondition,numberOfConditions*sizeof(uint8_t)));
     CHECK(cudaMemcpy(deviceClausesPerCondition,hostClausesPerCondition.data(),
                          numberOfConditions*sizeof(uint8_t),cudaMemcpyHostToDevice));
     
-    uint8_t* deviceBitwiseCondition[conditions.size()];
-    for(uint conditionInd=0; conditionInd<conditions.size(); conditionInd++)
+    uint8_t** deviceBitwiseCondition;
+    CHECK(cudaMalloc((void***)&(deviceBitwiseCondition),numberOfConditions*sizeof(uint8_t*)));
+    for(uint conditionInd=0; conditionInd<numberOfConditions; conditionInd++)
     {
-        CHECK(cudaMalloc((void**)&(deviceBitwiseCondition[conditionInd]), 
+        CHECK(cudaMalloc((void**)(deviceBitwiseCondition+conditionInd), 
                          hostClausesPerCondition[conditionInd]*sizeof(uint8_t)*96));
-        CHECK(cudaMemcpy(deviceBitwiseCondition[conditionInd],hostBitwiseCondition[conditionInd].data(), 
+        CHECK(cudaMemcpy(deviceBitwiseCondition+conditionInd,hostBitwiseCondition[conditionInd].data(), 
                          numberOfConditions*sizeof(uint8_t)*96,cudaMemcpyHostToDevice));
     }
     
@@ -128,19 +155,44 @@ void ChessInformationSet::markIncompatibleBoardsGPU
     CHECK(cudaMalloc((void**)&deviceInfoSetPtr,cis_byte_size*sizeof(uint8_t)));
     CHECK(cudaMemcpy(deviceInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice));
     
-    std::vector<std::uint8_t> hostIncompatibleBoards(cis_size);
+    std::cout<<"cis_size:"<<int(cis_size)<<std::endl;
+    std::cout<<"cis_byte_size:"<<int(cis_byte_size)<<std::endl;
+    
+    auto result = std::make_unique<std::vector<std::uint8_t>>(cis_size);
+    std::vector<std::uint8_t>& hostIncompatibleBoards = *result;
     uint8_t* deviceIncompatibleBoards;
     CHECK(cudaMalloc((void**)&deviceIncompatibleBoards,cis_size*sizeof(uint8_t)));
     
-    checkConditions<<<1,1>>>
+    std::cout<<"Before kernel invocation"<<std::endl;
+    
+    int suggested_blockSize; 
+    int suggested_minGridSize;
+    cudaOccupancyMaxPotentialBlockSize( &suggested_minGridSize, &suggested_blockSize, checkConditions, 0, 0);
+    int device;
+    cudaGetDevice(&device); 
+    struct cudaDeviceProp deviceProp;
+    cudaGetDeviceProperties(&deviceProp, device);    
+    
+    std::cout<<"suggested_blockSize:"<<int(suggested_blockSize)<<std::endl;
+    std::cout<<"suggested_minGridSize:"<<int(suggested_minGridSize)<<std::endl;
+    std::cout<<"device:"<<int(device)<<std::endl;
+
+    dim3 blocks(suggested_blockSize);
+    std::cout<<"blocks.x:"<<blocks.x<<std::endl;
+    dim3 grids(ceil((float)cis_size/suggested_blockSize));
+    std::cout<<"grids.x:"<<grids.x<<std::endl;
+    
+    checkConditions<<<grids,blocks>>>
     (
         numberOfConditions,
         deviceClausesPerCondition,
-        deviceBitwiseCondition,
+        deviceBitwiseCondition, // Is still host pointer
         deviceInfoSetPtr,
         cis_size,
         deviceIncompatibleBoards
     );
+    
+    std::cout<<"After kernel invocation"<<std::endl;
     
     CHECK(cudaMemcpy(deviceIncompatibleBoards,hostIncompatibleBoards.data(),
                      cis_size*sizeof(uint8_t),cudaMemcpyDeviceToHost));
@@ -158,5 +210,53 @@ void ChessInformationSet::markIncompatibleBoardsGPU
         if(hostIncompatibleBoards[boardIndex]==1)
             incompatibleBoards.push(boardIndex);
     }
+    
+    std::cout<<"End of function"<<std::endl;
+
+    return result;
 }
+
+__global__ void initialSum // max threads == 256
+(
+    uint8_t* boardInfoSet,
+    uint64_t boardInfoSetSize,
+    uint64_t* boardSum    
+)
+{
+    __shared__ uint8_t boards[256][6][8];
+    unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    if(index >= boardInfoSetSize)
+        return;
+    
+    for(uint pieceType=0; pieceType<6; pieceType++)
+    {
+        for(uint row=0; row<8; row++)
+        {
+            boards[threadIdx.x][pieceType][row] = boardInfoSet[index+pieceType*8+row];
+        }
+    }
+    __syncthreads();
+    
+    for(uint8_t pieceType=0; pieceType<6; pieceType++)
+    {
+        uint64_t onePieceBoard[64];
+        for(uint8_t row=0; row<8; row++)
+        {
+            for(uint8_t col=0; col<8; col++)
+            {
+                if(CISgetBit(boards[threadIdx.x][pieceType][row],7-col))
+                    onePieceBoard[row*8+col]++;
+            }
+        }
+        for(uint8_t squareInd=0; squareInd<64; squareInd++)
+            *(boardSum+(blockIdx.x*6*64)+pieceType*64+squareInd) = onePieceBoard[squareInd];
+    }
+}
+
+std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeDistributionGPU()
+{
+    
+}
+
 }

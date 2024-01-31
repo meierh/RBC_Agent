@@ -282,6 +282,7 @@ private:
     FRIEND_TEST(rbcagentfullchessinfo_test, DecodeFENFigurePlacement_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, Observation_test);
     FRIEND_TEST(chessinformationset_test, boardClause_test);
+    FRIEND_TEST(chessinformationset_test, getIncompatibleGPU_test);
 };
 }
 

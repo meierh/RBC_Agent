@@ -431,6 +431,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         
         std::unique_ptr<Distribution> computeDistribution();
         
+        std::unique_ptr<Distribution> computeDistributionGPU();
+        
         /**
          * Marks boards incompatible with observations
          * @param noPieces
@@ -438,6 +440,14 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          * @param knownPieces
          */
         void markIncompatibleBoards(const std::vector<BoardClause>& conditions);
+    
+        /**
+         * Marks boards incompatible with observations
+         * @param noPieces
+         * @param unknownPieces
+         * @param knownPieces
+         */
+        std::unique_ptr<std::vector<std::uint8_t>> getIncompatibleBoardsGPU(const std::vector<BoardClause>& conditions);
         void markIncompatibleBoardsGPU(const std::vector<BoardClause>& conditions);
         
         //bool evaluateHornClause(const std::vector<BoardClause>& hornClause, OnePlayerChessInfo& piecesInfo);
