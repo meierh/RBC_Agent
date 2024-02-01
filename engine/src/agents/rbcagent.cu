@@ -43,11 +43,11 @@ __device__ void numberToChar
 __global__ void genFEN
 (
     
+    uint8_t* oppoBoardInfoSet, // 6*64 pieces + 2*1 castling + 64 en_passant + 7 halfmove + 7 prob (in bits)
+    char oppoPieceCharSet[6], // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
+    char selfColor, // w or b
     uint8_t* selfBoardInfoSet, // 6*64 pieces + 2*1 castling + 64 en_passant + 7 halfmove + 7 prob (in bits)
     char selfPieceCharSet[6], // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
-    char selfColor, // w or b
-    uint8_t* opponentBoardInfoSet, // 6*64 pieces + 2*1 castling + 64 en_passant + 7 halfmove + 7 prob (in bits)
-    char opponentPieceCharSet[6], // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
     char turnColor, // w or b
     uint64_t boardInfoSetSize,
     uint16_t nextMoveNumber,
@@ -63,13 +63,13 @@ __global__ void genFEN
         __shared__ char oppoPiecesChar[6];
         for(uint8_t byteInd=0; byteInd<58; byteInd++)
         {
-            selfBoard[byteInd] = selfBoardInfoSet[byteInd];
-            oppoBoard[byteInd] = opponentBoardInfoSet[index*58+byteInd];
+            selfBoard[byteInd] = oppoBoardInfoSet[byteInd];
+            oppoBoard[byteInd] = selfBoardInfoSet[index*58+byteInd];
         }
         for(uint8_t pieceInd=0; pieceInd<6; pieceInd++)
         {
-            selfPiecesChar[pieceInd] = selfPieceCharSet[pieceInd];
-            oppoPiecesChar[pieceInd] = opponentPieceCharSet[pieceInd];
+            selfPiecesChar[pieceInd] = oppoPieceCharSet[pieceInd];
+            oppoPiecesChar[pieceInd] = selfPieceCharSet[pieceInd];
         }
         
         char oneFenString[100];
@@ -239,111 +239,69 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
     const unsigned int nextCompleteTurn,
     std::vector<std::string> allFEN
 )
-{
-    /*
+{    
+    std::uint64_t cis_size = size();
+    std::uint64_t cis_byte_size = cis_size*(chessInfoSize/8);
+    std::uint8_t* hostInfoSetPtr = getInfoSetPtr();
+    uint8_t* deviceOppoInfoSetPtr;
+    CHECK(cudaMalloc((void**)&deviceOppoInfoSetPtr,cis_byte_size*sizeof(uint8_t)));
+    CHECK(cudaMemcpy(deviceOppoInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice));
+    
+    std::cout<<"cis_size:"<<int(cis_size)<<std::endl;
+    std::cout<<"cis_byte_size:"<<int(cis_byte_size)<<std::endl;
+    
+    uint8_t* deviceSelfInfoSetPtr;
+    CHECK(cudaMalloc((void**)&deviceSelfInfoSetPtr,58*sizeof(uint8_t)));
+    CHECK(cudaMemcpy(deviceSelfInfoSetPtr,hostInfoSetPtr,58*sizeof(uint8_t),cudaMemcpyHostToDevice));
+    
+    char* deviceFenVector;
+    std::vector<char> hostFenVector(cis_size*100);
+    CHECK(cudaMalloc((void**)&deviceFenVector,cis_size*100*sizeof(char)));
+        
+    std::cout<<"Before kernel invocation"<<std::endl;
+    
     int suggested_blockSize; 
     int suggested_minGridSize;
     cudaOccupancyMaxPotentialBlockSize( &suggested_minGridSize, &suggested_blockSize, genFEN, 0, 0);
     int device;
-    cudaGetDevice(&device);
-
+    cudaGetDevice(&device); 
     struct cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, device);    
     
-    // block Size per dimension out of suggested_blockSize
-    int provSqrt = (int) std::sqrt(suggested_blockSize);
-    // make blockSize a multiplier of the device warp Size
-    int warpMult = suggested_blockSize / deviceProp.warpSize;
-   
-	int block_dim_x;
-    int block_dim_y;
-    
-    if(warpMult != 0)
-    {
-        block_dim_x = deviceProp.warpSize;
-        block_dim_y = warpMult;
-    }
-    else
-    {
-        block_dim_x = provSqrt;
-        block_dim_y = suggested_blockSize / provSqrt;
-    }
-    
-	dim3 blocks(block_dim_x,block_dim_y);
-    dim3 grids(ceil(input.cols/grids.x),ceil((float)input.rows/grids.y));    
-    */
+    std::cout<<"suggested_blockSize:"<<int(suggested_blockSize)<<std::endl;
+    std::cout<<"suggested_minGridSize:"<<int(suggested_minGridSize)<<std::endl;
+    std::cout<<"device:"<<int(device)<<std::endl;
 
-    /*
-    std::cout<<"Mark boards that do not fit: ";
-    for(auto clause : conditions)
-        std::cout<<clause.to_string()<<"&&";
-    std::cout<<std::endl;
-
-    std::vector<std::vector<std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>>> hostBitwiseCondition;
-    hostBitwiseCondition.resize(conditions.size());
-    std::uint8_t numberOfConditions = conditions.size();
-    std::vector<std::uint8_t> hostClausesPerCondition(numberOfConditions);
-    if(numberOfConditions>25)
-        throw std::logic_error("There must maximal 25 conditions");
-    for(uint conditionInd=0; conditionInd<conditions.size(); conditionInd++)
-    {
-        conditions[conditionInd].to_bits(hostBitwiseCondition[conditionInd]);
-        hostClausesPerCondition[conditionInd] = hostBitwiseCondition[conditionInd].size();
-        if(hostBitwiseCondition[conditionInd].size()>2)
-            throw std::logic_error("There must only be 2 clauses per condition");
-    }
+    dim3 blocks(suggested_blockSize);
+    std::cout<<"blocks.x:"<<blocks.x<<std::endl;
+    dim3 grids(ceil((float)cis_size/suggested_blockSize));
+    std::cout<<"grids.x:"<<grids.x<<std::endl;
     
-    uint8_t* deviceClausesPerCondition;
-    CHECK(cudaMalloc((void**)&deviceClausesPerCondition,numberOfConditions*sizeof(uint8_t)));
-    CHECK(cudaMemcpy(deviceClausesPerCondition,hostClausesPerCondition.data(),
-                         numberOfConditions*sizeof(uint8_t),cudaMemcpyHostToDevice));
-    
-    uint8_t* deviceBitwiseCondition[conditions.size()];
-    for(uint conditionInd=0; conditionInd<conditions.size(); conditionInd++)
-    {
-        CHECK(cudaMalloc((void**)&(deviceBitwiseCondition[conditionInd]), 
-                         hostClausesPerCondition[conditionInd]*sizeof(uint8_t)*96));
-        CHECK(cudaMemcpy(deviceBitwiseCondition[conditionInd],hostBitwiseCondition[conditionInd].data(), 
-                         numberOfConditions*sizeof(uint8_t)*96,cudaMemcpyHostToDevice));
-    }
-    
-    std::uint64_t cis_size = size();
-    std::uint64_t cis_byte_size = cis_size*(chessInfoSize/8);
-    std::uint8_t* hostInfoSetPtr = getInfoSetPtr();
-    uint8_t* deviceInfoSetPtr;
-    CHECK(cudaMalloc((void**)&deviceInfoSetPtr,cis_byte_size*sizeof(uint8_t)));
-    CHECK(cudaMemcpy(deviceInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice));
-    
-    std::vector<std::uint8_t> hostIncompatibleBoards(cis_size);
-    uint8_t* deviceIncompatibleBoards;
-    CHECK(cudaMalloc((void**)&deviceIncompatibleBoards,cis_size*sizeof(uint8_t)));
-    
-    checkConditions<<<1,1>>>
+    genFEN<<<grids,blocks>>>
     (
-        numberOfConditions,
-        deviceClausesPerCondition,
-        deviceBitwiseCondition,
-        deviceInfoSetPtr,
-        cis_size,
-        deviceIncompatibleBoards
+        deviceOppoInfoSetPtr,
+        char selfPieceCharSet[6], // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
+        char selfColor, // w or b
+        deviceSelfInfoSetPtr,
+        char opponentPieceCharSet[6], // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
+        char turnColor, // w or b
+        uint64_t boardInfoSetSize,
+        uint16_t nextMoveNumber,
+        deviceFenVector
     );
     
-    CHECK(cudaMemcpy(deviceIncompatibleBoards,hostIncompatibleBoards.data(),
-                     cis_size*sizeof(uint8_t),cudaMemcpyDeviceToHost));
+    std::cout<<"After kernel invocation"<<std::endl;
     
-    cudaFree(deviceClausesPerCondition);
-    for(uint conditionInd=0; conditionInd<conditions.size(); conditionInd++)
+    CHECK(cudaMemcpy(hostFenVector.data(),deviceFenVector,cis_size*100*sizeof(char),cudaMemcpyDeviceToHost));
+    for(uint index=0; index<hostFenVector.size(); index+=100)
     {
-        cudaFree(deviceBitwiseCondition[conditionInd]);
+        allFEN.push_back(hostFenVector.data()+index);
     }
-    cudaFree(deviceInfoSetPtr);
-    cudaFree(deviceIncompatibleBoards);
-
-    for(uint64_t boardIndex=0; boardIndex<hostIncompatibleBoards.size(); boardIndex++)
-    {
-        if(hostIncompatibleBoards[boardIndex]==1)
-            incompatibleBoards.push(boardIndex);
-    }
-    */
+    
+    cudaFree(deviceOppoInfoSetPtr);
+    cudaFree(deviceSelfInfoSetPtr);
+    cudaFree(deviceFenVector);
+    
+    std::cout<<"End of function"<<std::endl;
 }
 }

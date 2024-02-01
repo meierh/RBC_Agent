@@ -40,7 +40,7 @@ __global__ void checkConditions
 (
     uint8_t numberOfConditions,
     uint8_t* clausesPerCondition,
-    uint8_t** conditionArray,
+    uint8_t* conditionArray,
     uint8_t* boardInfoSet,
     uint64_t boardInfoSetSize,
     uint8_t* incompatibleBoards    
@@ -48,17 +48,19 @@ __global__ void checkConditions
 {
     __shared__ uint8_t clauseNbr[25];
     __shared__ uint8_t clauses[25][2][2][48];
+    uint8_t* clauseStart = conditionArray;
     for(uint condInd=0; condInd<numberOfConditions; condInd++)
     {
         uint8_t numberOfClauses = clausesPerCondition[condInd];
-        clauseNbr[condInd] = numberOfClauses;        
+        clauseNbr[condInd] = numberOfClauses;
         for(uint clauseInd=0; clauseInd<numberOfClauses; clauseInd++)
         {
             for(uint byteInd=0; byteInd<48; byteInd++)
             {
-                clauses[condInd][clauseInd][0][byteInd] = conditionArray[condInd][clauseInd*116+byteInd];
-                clauses[condInd][clauseInd][1][byteInd] = conditionArray[condInd][clauseInd*116+48+byteInd];
+                clauses[condInd][clauseInd][0][byteInd] = *(clauseStart+byteInd);
+                clauses[condInd][clauseInd][1][byteInd] = *(clauseStart+48+byteInd);
             }
+            clauseStart += 96;
         }
     }
     
@@ -138,15 +140,53 @@ std::unique_ptr<std::vector<std::uint8_t>> ChessInformationSet::getIncompatibleB
     CHECK(cudaMemcpy(deviceClausesPerCondition,hostClausesPerCondition.data(),
                          numberOfConditions*sizeof(uint8_t),cudaMemcpyHostToDevice));
     
-    uint8_t** deviceBitwiseCondition;
-    CHECK(cudaMalloc((void***)&(deviceBitwiseCondition),numberOfConditions*sizeof(uint8_t*)));
-    for(uint conditionInd=0; conditionInd<numberOfConditions; conditionInd++)
+    std::cout<<"Start remapping"<<std::endl;
+    std::vector<std::uint8_t> remapClausesPerCondition(numberOfConditions);
+    CHECK(cudaMemcpy(remapClausesPerCondition.data(),deviceClausesPerCondition,
+                         numberOfConditions*sizeof(uint8_t),cudaMemcpyDeviceToHost));
+    std::for_each(remapClausesPerCondition.begin(),remapClausesPerCondition.end(),[](auto ind){std::cout<<int(ind)<<" ";});
+    std::cout<<"Remapped"<<std::endl;
+    
+    std::vector<std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>> hostBitwiseConditionFlat;
+    for(auto oneCondition : hostBitwiseCondition)
     {
-        CHECK(cudaMalloc((void**)(deviceBitwiseCondition+conditionInd), 
-                         hostClausesPerCondition[conditionInd]*sizeof(uint8_t)*96));
-        CHECK(cudaMemcpy(deviceBitwiseCondition+conditionInd,hostBitwiseCondition[conditionInd].data(), 
-                         numberOfConditions*sizeof(uint8_t)*96,cudaMemcpyHostToDevice));
+        /*
+        for(auto oneClause : oneCondition)
+        {
+            auto firstPart = oneClause.first;
+            for(auto byte : firstPart)
+                std::cout<<uint(byte)<<" ";
+            std::cout<<std::endl;
+            auto secondPart = oneClause.second;
+            for(auto byte : secondPart)
+                std::cout<<uint(byte)<<" ";
+            std::cout<<std::endl;
+        }
+        */
+        hostBitwiseConditionFlat.insert(hostBitwiseConditionFlat.end(),oneCondition.begin(),oneCondition.end());
     }
+    
+    uint8_t* deviceBitwiseCondition;
+    uint byteSizeMem = hostBitwiseConditionFlat.size()*sizeof(uint8_t)*96;
+    CHECK(cudaMalloc((void**)&(deviceBitwiseCondition),byteSizeMem));
+    CHECK(cudaMemcpy(deviceBitwiseCondition,hostBitwiseConditionFlat.data(),byteSizeMem,cudaMemcpyHostToDevice));    
+
+    std::cout<<"Start remapping"<<std::endl;
+    std::vector<std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>> remapHostBitwiseCondition(hostBitwiseConditionFlat.size());
+    CHECK(cudaMemcpy(remapHostBitwiseCondition.data(),deviceBitwiseCondition,byteSizeMem,cudaMemcpyDeviceToHost));    
+    for(auto oneCondition : remapHostBitwiseCondition)
+    {
+        auto firstPart = oneCondition.first;
+        for(auto byte : firstPart)
+            std::cout<<uint(byte)<<" ";
+        std::cout<<std::endl;
+        auto secondPart = oneCondition.second;
+        for(auto byte : secondPart)
+            std::cout<<uint(byte)<<" ";
+        std::cout<<std::endl;
+    }
+    std::cout<<"Remapped"<<std::endl;
+
     
     std::uint64_t cis_size = size();
     std::uint64_t cis_byte_size = cis_size*(chessInfoSize/8);
@@ -194,14 +234,11 @@ std::unique_ptr<std::vector<std::uint8_t>> ChessInformationSet::getIncompatibleB
     
     std::cout<<"After kernel invocation"<<std::endl;
     
-    CHECK(cudaMemcpy(deviceIncompatibleBoards,hostIncompatibleBoards.data(),
+    CHECK(cudaMemcpy(hostIncompatibleBoards.data(),deviceIncompatibleBoards,
                      cis_size*sizeof(uint8_t),cudaMemcpyDeviceToHost));
     
     cudaFree(deviceClausesPerCondition);
-    for(uint conditionInd=0; conditionInd<conditions.size(); conditionInd++)
-    {
-        cudaFree(deviceBitwiseCondition[conditionInd]);
-    }
+    cudaFree(deviceBitwiseCondition);
     cudaFree(deviceInfoSetPtr);
     cudaFree(deviceIncompatibleBoards);
 

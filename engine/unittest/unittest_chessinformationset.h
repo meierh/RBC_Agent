@@ -612,12 +612,6 @@ TEST(chessinformationset_test, getIncompatibleGPU_test)
     RBCAgent::FullChessInfo fci9(fen9);
     std::string fen10 = "2r5/2P3p1/2Q1p3/1P1p3B/2P4K/3p4/p1NP1k2/q7 w - - 0 1";
     RBCAgent::FullChessInfo fci10(fen10);
-    std::string fen11 = "7N/8/8/8/5k2/8/1PK5/8 w - - 0 1";
-    RBCAgent::FullChessInfo fci11(fen11);
-    std::string fen12 = "8/8/8/6k1/8/K7/8/8 w - - 0 1";
-    RBCAgent::FullChessInfo fci12(fen12);
-    std::string fen13 = "2rn1b2/2pPNQ1P/K3Bpb1/2PPPpp1/np1kN1RP/p4p2/P1Pqp2R/2B4r w - - 0 1";
-    RBCAgent::FullChessInfo fci13(fen13);
     
     cis.add( fci1.white,0);
     cis.add( fci2.white,0);
@@ -631,7 +625,9 @@ TEST(chessinformationset_test, getIncompatibleGPU_test)
     cis.add(fci10.white,0);
         
     BC clause1(SQ(COL::A,ROW::two),PT::pawn);
-    std::vector<BC> conditions = {clause1};
+    BC clause2(SQ(COL::A,ROW::one),PT::rook);
+    clause2 = clause2 | BC(SQ(COL::A,ROW::three),PT::none);
+    std::vector<BC> conditions = {clause1,clause2};
     
     std::unique_ptr<std::vector<std::uint8_t>> incompBoards = cis.getIncompatibleBoardsGPU(conditions);
     
