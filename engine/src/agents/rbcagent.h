@@ -86,7 +86,7 @@ private:
             
             static void getAllFEN_GPU
             (
-                const CIS::OnePlayerChessInfo& self,
+                CIS::OnePlayerChessInfo& self,
                 const PieceColor selfColor,
                 std::unique_ptr<ChessInformationSet>& cis,
                 const PieceColor nextTurn,

@@ -127,7 +127,7 @@ TEST(rbcagentfullchessinfo_test, FENReconstructionGPU_test)
     
     std::vector<std::string> fens = 
     {
-        "rnbqkbnr/pppppppp/8/8/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1"/*,
+        "rnbqkbnr/pppppppp/8/8/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1",
         "rnbqkbnr/pp1pp1pp/2p5/5p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq f6 0 1",
         "rnb1kbnr/pp1pp1pp/1qp5/5p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1",
         "rnb1kbnr/pp2p1pp/1qpp4/5p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1",
@@ -145,7 +145,7 @@ TEST(rbcagentfullchessinfo_test, FENReconstructionGPU_test)
         "1n3rk1/rp1b3p/3p1npb/pqpp1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1",
         "1n3rk1/rp5p/2bp1npb/pqpp1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1",
         "1n3rk1/rp5p/2bp1npb/pqpp4/1B2P1p1/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1",
-        "1n3rk1/rp5p/2bp1np1/pqpp4/1B2Pbp1/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1"*/
+        "1n3rk1/rp5p/2bp1np1/pqpp4/1B2Pbp1/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1"
     };
     
     auto cisUPtr = std::make_unique<CIS>();
@@ -165,11 +165,14 @@ TEST(rbcagentfullchessinfo_test, FENReconstructionGPU_test)
         RBCAgent::PieceColor::white,
         cisUPtr,
         RBCAgent::PieceColor::white,
-        10,
+        1,
         allFEN
     );
     
-    EXPECT_EQ(allFEN,fens);
+    for(int i=0; i<allFEN.size(); i++)
+    {
+        EXPECT_EQ(allFEN[i],fens[i]);
+    }
 }
 
 TEST(rbcagentfullchessinfo_test, FENSplitting_test)

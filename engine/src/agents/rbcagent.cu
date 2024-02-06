@@ -22,6 +22,12 @@ __device__ void numberToChar
 )
 {
     bool startedWriting = false;
+    if(number==0)
+    {
+        **string = '0';
+        *string = *string + 1;
+        return;
+    }
     for(uint16_t decimal = 10000; decimal>0; decimal /= 10)
     {
         uint16_t firstDigit = number / decimal;
@@ -180,11 +186,11 @@ __global__ void genFEN
         *strFenIndex = ' ';
         strFenIndex++;
         
-        //En passant
+        //En passant        
         uint8_t* enPassant = (turnColor==selfColor)?(oppoBoard+48):(selfBoard+48);
         uint8_t offset = 2;
         char enPas[2] = {'-',' '};
-        for(uint8_t row=0; row<8; row--)
+        for(int8_t row=7; row>=0; row--)
         {
             for(uint8_t col=0; col<8; col++)
             {
@@ -205,6 +211,7 @@ __global__ void genFEN
         if(enPas[1]!=' ')
             strFenIndex++;
         *strFenIndex = ' ';
+        strFenIndex++;
 
         //Halfmove number
         uint8_t* selfHalfMoveNumPtr = selfBoard+56;
@@ -242,7 +249,7 @@ __global__ void genFEN
 
 void RBCAgent::FullChessInfo::getAllFEN_GPU
 (
-    const CIS::OnePlayerChessInfo& self,
+    CIS::OnePlayerChessInfo& self,
     const PieceColor selfColor,
     std::unique_ptr<ChessInformationSet>& cis,
     const PieceColor nextTurn,
@@ -256,10 +263,7 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
     uint8_t* deviceOppoInfoSetPtr;
     CHECK(cudaMalloc((void**)&deviceOppoInfoSetPtr,cis_byte_size*sizeof(uint8_t)));
     CHECK(cudaMemcpy(deviceOppoInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice));
-    
-    std::cout<<"cis_size:"<<int(cis_size)<<std::endl;
-    std::cout<<"cis_byte_size:"<<int(cis_byte_size)<<std::endl;
-    
+        
     std::vector<char> whitePieces = {'P','N','B','R','Q','K'};
     std::vector<char> blackPieces = {'p','n','b','r','q','k'};
     
@@ -283,16 +287,28 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
     
     char turnColor = (nextTurn==PieceColor::white)?'w':'b';
     
+    std::array<std::uint8_t,58> selfBoardData;
+    std::unique_ptr<std::bitset<chessInfoSize>> encodedBoard = cis->encodeBoard(self,1);
+    for(int i=0; i<chessInfoSize; i+=8)
+    {
+        std::uint8_t byteInd = i/8;
+        std::bitset<8> byteSet;
+        for(int k=0;k<8;k++)
+            byteSet[k] = (*encodedBoard)[i+k];
+        std::uint8_t value = 0;
+        for(int k=0;k<8;k++)
+            if(byteSet[k])
+                value |= 1<<(7-k);
+        selfBoardData[byteInd] = value; 
+    }
     uint8_t* deviceSelfInfoSetPtr;
     CHECK(cudaMalloc((void**)&deviceSelfInfoSetPtr,58*sizeof(uint8_t)));
-    CHECK(cudaMemcpy(deviceSelfInfoSetPtr,hostInfoSetPtr,58*sizeof(uint8_t),cudaMemcpyHostToDevice));
+    CHECK(cudaMemcpy(deviceSelfInfoSetPtr,selfBoardData.data(),58*sizeof(uint8_t),cudaMemcpyHostToDevice));
     
     char* deviceFenVector;
     std::vector<char> hostFenVector(cis_size*100);
     CHECK(cudaMalloc((void**)&deviceFenVector,cis_size*100*sizeof(char)));
-        
-    std::cout<<"Before kernel invocation"<<std::endl;
-    
+            
     int suggested_blockSize; 
     int suggested_minGridSize;
     cudaOccupancyMaxPotentialBlockSize( &suggested_minGridSize, &suggested_blockSize, genFEN, 0, 0);
@@ -301,14 +317,8 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
     struct cudaDeviceProp deviceProp;
     cudaGetDeviceProperties(&deviceProp, device);    
     
-    std::cout<<"suggested_blockSize:"<<int(suggested_blockSize)<<std::endl;
-    std::cout<<"suggested_minGridSize:"<<int(suggested_minGridSize)<<std::endl;
-    std::cout<<"device:"<<int(device)<<std::endl;
-
     dim3 blocks(suggested_blockSize);
-    std::cout<<"blocks.x:"<<blocks.x<<std::endl;
     dim3 grids(ceil((float)cis_size/suggested_blockSize));
-    std::cout<<"grids.x:"<<grids.x<<std::endl;
     
     genFEN<<<grids,blocks>>>
     (
@@ -322,22 +332,18 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
         nextCompleteTurn,
         deviceFenVector
     );
-    
-    std::cout<<"After kernel invocation"<<std::endl;
-    
+    cudaDeviceSynchronize();
+        
     CHECK(cudaMemcpy(hostFenVector.data(),deviceFenVector,cis_size*100*sizeof(char),cudaMemcpyDeviceToHost));
     for(uint index=0; index<hostFenVector.size(); index+=100)
     {
         allFEN.push_back(std::string(hostFenVector.data()+index));
     }
-    std::cout<<allFEN.size()<<std::endl;
     
     cudaFree(deviceOppoInfoSetPtr);
     cudaFree(deviceSelfPieceCharSet);
     cudaFree(deviceSelfInfoSetPtr);
     cudaFree(deviceOppoPieceCharSet);
-    cudaFree(deviceFenVector);
-    
-    std::cout<<"End of function"<<std::endl;
+    cudaFree(deviceFenVector);    
 }
 }

@@ -467,6 +467,17 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         
         void add(std::vector<std::pair<OnePlayerChessInfo,double>>& items);
         
+        std::unique_ptr<std::pair<OnePlayerChessInfo,double>> decodeBoard
+        (
+            const std::bitset<chessInfoSize>& bits
+        ) const;
+        
+        std::unique_ptr<std::bitset<chessInfoSize>> encodeBoard
+        (
+            OnePlayerChessInfo& piecesInfo,
+            double probability
+        ) const;
+        
         ChessInformationSet();
     protected:
         /**
@@ -494,17 +505,6 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          *         probability of given board [0,1]
          */
         std::unique_ptr<std::pair<OnePlayerChessInfo,double>> getBoard(const std::uint64_t index) const;
-        
-        std::unique_ptr<std::pair<OnePlayerChessInfo,double>> decodeBoard
-        (
-            const std::bitset<chessInfoSize>& bits
-        ) const;
-        
-        std::unique_ptr<std::bitset<chessInfoSize>> encodeBoard
-        (
-            OnePlayerChessInfo& piecesInfo,
-            double probability
-        ) const;
 
         friend class CIS_Iterator;
         
