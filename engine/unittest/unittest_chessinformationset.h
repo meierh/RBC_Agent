@@ -590,50 +590,116 @@ TEST(chessinformationset_test, getIncompatibleGPU_test)
     using ROW = ChessInformationSet::ChessRow;
     using PT = ChessInformationSet::BoardClause::PieceType;
     using CIS = ChessInformationSet;
+    
+    CIS cis0;
+    std::string fen0 = "rnbqkbnr/pppppp1p/6p1/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1";
+    RBCAgent::FullChessInfo fci(fen0);
+    cis0.add(fci.black,1);
+    BC clause03(SQ(COL::G,ROW::seven),PT::none);
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards03 = cis0.checkBoardsValidGPU({clause03});
+    std::vector<std::uint8_t> compatible03 = {1};
+    EXPECT_EQ(*incompBoards03,compatible03);
+    
+    CIS cis01;
+    std::string fen01 = "rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1";
+    RBCAgent::FullChessInfo fci1(fen01);
+    cis01.add(fci1.black,1);
+    BC clause031(SQ(COL::A,ROW::two),PT::pawn);
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards031 = cis01.checkBoardsValidGPU({clause031});
+    std::vector<std::uint8_t> compatible031 = {0};
+    EXPECT_EQ(*incompBoards031,compatible031);
+    
     CIS cis;
+    std::vector<std::string> fens = 
+    {
+        "rnbqkbnr/pppppppp/8/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "rnbqkbnr/1ppppppp/8/8/8/8/pPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "rnbqkb1r/pppppppp/5n2/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "rnbqkb1r/1ppppppp/5n2/8/8/8/pPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "rnbqkbnr/pppppp1p/6p1/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "rnbqkbnr/1ppppp1p/6p1/8/8/8/pPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "rnbqkb1r/pppppp1p/5np1/8/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "rnbqkb1r/1ppppp1p/5np1/8/8/8/pPPPPPPP/RNBQKBNR w KQkq - 0 1",
+
+        "r1bqkbnr/pppppppp/8/2n5/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r1bqkbnr/1ppppppp/8/2n5/8/8/pPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r1bqkb1r/pppppppp/5n2/2n5/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r1bqkb1r/1ppppppp/5n2/2n5/8/8/pPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r1bqkbnr/pppppp1p/6p1/2n5/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r1bqkbnr/1ppppp1p/6p1/2n5/8/8/pPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r1bqkb1r/pppppp1p/5np1/2n5/8/8/1PPPPPPP/RNBQKBNR w KQkq - 0 1",
+        "r1bqkb1r/1ppppp1p/5np1/2n5/8/8/pPPPPPPP/RNBQKBNR w KQkq - 0 1"        
+    };
+    std::vector<std::uint8_t> compatible = {0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1};
+    
+    for(std::string oneFen : fens)
+    {
+        RBCAgent::FullChessInfo fci(oneFen);
+        cis.add(fci.black,1);
+    }
+    
+    BC clause1(SQ(COL::A,ROW::two),PT::pawn);
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards1 = cis.checkBoardsValidGPU({clause1});
+    std::vector<std::uint8_t> compatible1 = {0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1};
+    EXPECT_EQ(*incompBoards1,compatible1);
+    
+    BC clause2(SQ(COL::F,ROW::six),PT::knight);
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards2 = cis.checkBoardsValidGPU({clause2});
+    std::vector<std::uint8_t> compatible2 = {0,0,1,1,0,0,1,1,0,0,1,1,0,0,1,1,};
+    EXPECT_EQ(*incompBoards2,compatible2);
+    
+    BC clause3(SQ(COL::G,ROW::seven),PT::none);
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards3 = cis.checkBoardsValidGPU({clause3});
+    std::vector<std::uint8_t> compatible3 = {0,0,0,0,1,1,1,1,0,0,0,0,1,1,1,1};
+    EXPECT_EQ(*incompBoards3,compatible3);
+    
+    BC clause4(SQ(COL::C,ROW::five),PT::any);
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards4 = cis.checkBoardsValidGPU({clause4});
+    std::vector<std::uint8_t> compatible4 = {0,0,0,0,0,0,0,0,1,1,1,1,1,1,1,1};
+    EXPECT_EQ(*incompBoards4,compatible4);
+    
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards5 = cis.checkBoardsValidGPU({clause1,clause2});
+    std::vector<std::uint8_t> compatible5 = {0,0,0,1,0,0,0,1,0,0,0,1,0,0,0,1};
+    EXPECT_EQ(*incompBoards5,compatible5);
+    
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards6 = cis.checkBoardsValidGPU({clause2 | clause3});
+    std::vector<std::uint8_t> compatible6 = {0,0,1,1,1,1,1,1,0,0,1,1,1,1,1,1};
+    EXPECT_EQ(*incompBoards6,compatible6);
+    
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards7 = cis.checkBoardsValidGPU({clause3,clause4});
+    std::vector<std::uint8_t> compatible7 = {0,0,0,0,0,0,0,0,0,0,0,0,1,1,1,1};
+    EXPECT_EQ(*incompBoards7,compatible7);
+    
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards8 = cis.checkBoardsValidGPU({clause1,clause4});
+    std::vector<std::uint8_t> compatible8 = {0,0,0,0,0,0,0,0,0,1,0,1,0,1,0,1};
+    EXPECT_EQ(*incompBoards8,compatible8);
+    
+    std::unique_ptr<std::vector<std::uint8_t>> incompBoards9 = cis.checkBoardsValidGPU({clause1,clause2|clause3,clause4});
+    std::vector<std::uint8_t> compatible9 = {0,0,0,0,0,0,0,0,0,0,0,1,0,1,0,1};
+    EXPECT_EQ(*incompBoards9,compatible9);
+}
+
+TEST(chessinformationset_test, getDistributionGPU_test)
+{
+    using BC = ChessInformationSet::BoardClause;
+    using SQ = ChessInformationSet::Square;
+    using COL = ChessInformationSet::ChessColumn;
+    using ROW = ChessInformationSet::ChessRow;
+    using PT = ChessInformationSet::BoardClause::PieceType;
+    using CIS = ChessInformationSet;
+    CIS cis1;
     
     std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     RBCAgent::FullChessInfo fci1(fen1);
-    std::string fen2 = "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1";
-    RBCAgent::FullChessInfo fci2(fen2);
-    std::string fen3 = "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq c6 0 2";
-    RBCAgent::FullChessInfo fci3(fen3);
-    std::string fen4 = "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2";
-    RBCAgent::FullChessInfo fci4(fen4);
-    std::string fen5 = "6r1/6pp/7r/1B5K/1P3k2/N7/3R4/8 w - - 30 79";
-    RBCAgent::FullChessInfo fci5(fen5);
-    std::string fen6 = "2k5/5P1K/3P2p1/3P2NP/p3PBp1/5B2/Q4n2/6r1 w - - 0 1";
-    RBCAgent::FullChessInfo fci6(fen6);
-    std::string fen7 = "5r2/p1Q3pb/5p1p/4PP2/6p1/8/pBR1Nk2/3K4 w - - 0 1";
-    RBCAgent::FullChessInfo fci7(fen7);
-    std::string fen8 = "8/5pPn/kP2b3/P1PP1N2/5p1K/r1p5/P6p/8 w - - 0 1";
-    RBCAgent::FullChessInfo fci8(fen8);
-    std::string fen9 = "3b2B1/4p3/k2p3K/2P1nq2/4bP2/6P1/2p1r1P1/7Q w - - 0 1";
-    RBCAgent::FullChessInfo fci9(fen9);
-    std::string fen10 = "2r5/2P3p1/2Q1p3/1P1p3B/2P4K/3p4/p1NP1k2/q7 w - - 0 1";
-    RBCAgent::FullChessInfo fci10(fen10);
-    
-    cis.add( fci1.white,0);
-    cis.add( fci2.white,0);
-    cis.add( fci3.white,0);
-    cis.add( fci4.white,0);
-    cis.add( fci5.white,0);
-    cis.add( fci6.white,0);
-    cis.add( fci7.white,0);
-    cis.add( fci8.white,0);
-    cis.add( fci9.white,0);
-    cis.add(fci10.white,0);
-        
-    BC clause1(SQ(COL::A,ROW::two),PT::pawn);
-    BC clause2(SQ(COL::A,ROW::one),PT::rook);
-    clause2 = clause2 | BC(SQ(COL::A,ROW::three),PT::none);
-    std::vector<BC> conditions = {clause1,clause2};
-    
-    std::unique_ptr<std::vector<std::uint8_t>> incompBoards = cis.getIncompatibleBoardsGPU(conditions);
-    
-    std::cout<<std::endl;
-    std::for_each(incompBoards->begin(),incompBoards->end(),[](std::uint8_t value){std::cout<<bool(value)<<" ";});
-    std::cout<<std::endl;
 
+    for(uint i=0; i<1000; i++)
+        if(i%2==0)
+            cis1.add(fci1.white,1);
+        else
+            cis1.add(fci1.black,1);
+    
+    std::unique_ptr<CIS::Distribution> incompBoards = cis1.computeDistributionGPU();
+    //std::cout<<incompBoards->printComplete()<<std::endl;
+    //std::cout<<"End of test"<<std::endl;
 }
 };

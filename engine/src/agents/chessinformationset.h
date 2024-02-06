@@ -27,6 +27,7 @@
 #define CHESSINFORMATIONSET_H
 
 #include <gtest/gtest.h>
+#include <cuda_runtime_api.h>
 #include <iostream>
 #include <cassert>
 #include <memory>
@@ -395,9 +396,14 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                     return result;
                 }
                 
+                typedef struct{
+                    int one;
+                    int two;
+                }clauseBitsmyStruct;
+                
                 void to_bits
                 (
-                    std::vector<std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>>& bits
+                    std::vector<std::pair<std::uint8_t,std::array<std::uint8_t,48>>>& bits
                 ) const;
                 
                 FRIEND_TEST(chessinformationsetboardclause_test, constructor_test);
@@ -427,6 +433,9 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 
                 double getProbability(const Square& sq, const PieceType pT) const;
                 double getProbability(const std::uint8_t sqInd, const PieceType pT) const;
+                
+                std::string printBoard(const std::array<double,64>& piecesDistro) const;
+                std::string printComplete() const;
         };
         
         std::unique_ptr<Distribution> computeDistribution();
@@ -447,7 +456,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          * @param unknownPieces
          * @param knownPieces
          */
-        std::unique_ptr<std::vector<std::uint8_t>> getIncompatibleBoardsGPU(const std::vector<BoardClause>& conditions);
+        std::unique_ptr<std::vector<std::uint8_t>> checkBoardsValidGPU(const std::vector<BoardClause>& conditions);
         void markIncompatibleBoardsGPU(const std::vector<BoardClause>& conditions);
         
         //bool evaluateHornClause(const std::vector<BoardClause>& hornClause, OnePlayerChessInfo& piecesInfo);
@@ -554,6 +563,9 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         FRIEND_TEST(chessinformationset_test, encodeDecode_test);
         FRIEND_TEST(chessinformationset_test, addSetAndGetBoards_test);
         FRIEND_TEST(chessinformationset_test, boardClause_test);
+        FRIEND_TEST(chessinformationset_test, getDistributionGPU_test);
+
 };
+void CHECK(cudaError_t cuError);
 }
 #endif // INFORMATIONSET_H

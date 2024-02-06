@@ -250,6 +250,8 @@ class InformationSet
             infoSetSize = validItemsNumber;
         }
         
+        std::uint8_t* getInfoSetPtr(){return infoSet.get();}
+        
     protected:
         std::unique_ptr<std::vector<std::uint8_t>> getRawBitPattern(std::uint64_t index) const
         {
@@ -643,8 +645,6 @@ class InformationSet
         };
         */
         
-        std::uint8_t* getInfoSetPtr(){return infoSet.get();}
-
     private:
         std::unique_ptr<std::uint8_t[]> infoSet;
         std::uint64_t infoSetSize; //Last index in infoSet with a valid item

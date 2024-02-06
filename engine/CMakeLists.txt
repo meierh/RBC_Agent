@@ -102,6 +102,9 @@ endif()
 find_package(CUDAToolkit REQUIRED)
 find_package(Threads REQUIRED)
 enable_language(CUDA)
+
+#set(cuda_separable_compilation on)
+
 #set_target_properties(OpenSpielAra PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
 #set_target_properties(OpenSpielAra PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON) 
 
@@ -507,6 +510,8 @@ endif()
 
 add_executable(${PROJECT_NAME} ${source_files})
 
+#target_compile_options(unittests PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: --generate-line-info --use_fast_math --relocatable-device-code=true>)
+
 if (BACKEND_TENSORRT)
     target_link_libraries(${PROJECT_NAME} nvonnxparser nvinfer cudart ${CUDART_LIB} ${CUBLAS_LIB} ${CUDNN_LIB})
     if(BACKEND_TENSORRT_7)
@@ -572,3 +577,6 @@ message(STATUS ${UNIT_LINKED})
 #message(STATUS "--------------------")
 
 gtest_discover_tests(unittests)
+
+
+#target_compile_options(unittests PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: --generate-line-info --use_fast_math --relocatable-device-code=true>)

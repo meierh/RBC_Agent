@@ -331,25 +331,13 @@ std::unique_ptr<std::pair<ChessInformationSet::OnePlayerChessInfo,double>> Chess
 
 void ChessInformationSet::BoardClause::to_bits
 (
-    std::vector<std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>>& bits
+    std::vector<std::pair<std::uint8_t,std::array<std::uint8_t,48>>>& bits
 ) const
 {
     bits.resize(literalNbr);
     for(uint literalInd=0; literalInd<literalNbr; literalInd++)
     {
-        std::pair<std::array<std::uint8_t,48>,std::array<std::uint8_t,48>>& oneClause = bits[literalInd];
-        std::array<std::uint8_t,48>* demandPieces;
-        std::array<std::uint8_t,48>* demandNonPieces;
-        if(conditionBool[literalInd])
-        {
-            demandPieces = &(oneClause.first);
-            demandNonPieces = &(oneClause.second);
-        }
-        else
-        {
-            demandPieces = &(oneClause.second);
-            demandNonPieces = &(oneClause.first);
-        }
+        std::pair<std::uint8_t,std::array<std::uint8_t,48>>& oneClause = bits[literalInd];
         
         std::uint8_t squareboardIndex = squareToBoardIndex(boardPlaces[literalInd]);
         std::uint8_t squarebyteIndex = squareboardIndex/8;
@@ -359,22 +347,25 @@ void ChessInformationSet::BoardClause::to_bits
             for(std::uint8_t pieceTypeIndex=0; pieceTypeIndex<6; pieceTypeIndex++)
             {
                 std::uint8_t globalIndex = pieceTypeIndex*8+squarebyteIndex;
-                (*demandNonPieces)[globalIndex] |= (1<<(8-1-squarebitIndex));
+                oneClause.second[globalIndex] |= (1<<(8-1-squarebitIndex));
             }
+            oneClause.first = conditionBool[literalInd]?0:1;
         }
         else if(boardPlaceTypes[literalInd]==PieceType::any)
         {
             for(std::uint8_t pieceTypeIndex=0; pieceTypeIndex<6; pieceTypeIndex++)
             {
                 std::uint8_t globalIndex = pieceTypeIndex*8+squarebyteIndex;
-                (*demandPieces)[globalIndex] |= (1<<(8-1-squarebitIndex));
+                oneClause.second[globalIndex] |= (1<<(8-1-squarebitIndex));
             }
+            oneClause.first = conditionBool[literalInd]?1:0;
         }
         else
         {
             std::uint8_t pieceTypeIndex = static_cast<std::uint8_t>(boardPlaceTypes[literalInd]);
             std::uint8_t globalIndex = pieceTypeIndex*8+squarebyteIndex;
-            (*demandPieces)[globalIndex] |= (1<<(8-1-squarebitIndex));
+            oneClause.second[globalIndex] |= (1<<(8-1-squarebitIndex));
+            oneClause.first = conditionBool[literalInd]?1:0;
         }
     }
 }
@@ -418,6 +409,56 @@ double ChessInformationSet::Distribution::getProbability
             prob -= kings[sqInd];
             return prob;
     }        
+}
+
+std::string ChessInformationSet::Distribution::printBoard
+(
+    const std::array<double,64>& piecesDistro
+) const
+{
+    std::string resultBoard = "_________________________________________\n";
+    for(std::int8_t row=7; row>=0; row--)
+    {
+        resultBoard += "|";
+        for(std::int8_t col=0; col<8; col++)
+        {
+            Square sq(col,row);
+            std::uint8_t boardIndex = squareToBoardIndex(Square(col,row));
+            double prob = piecesDistro[boardIndex];
+            std::stringstream stream;
+            stream << std::fixed << std::setprecision(2) << prob;
+            std::string s = stream.str();
+            resultBoard += s;
+            resultBoard += "|";
+        }
+        resultBoard += "\n";
+    }
+    resultBoard += "-----------------------------------------\n";
+    return resultBoard;
+}
+
+std::string ChessInformationSet::Distribution::printComplete() const
+{
+    std::string resultStr;
+    resultStr+= "Pawn\n";
+    resultStr+= printBoard(pawns);
+    resultStr+="\n";
+    resultStr+= "Knight\n";
+    resultStr+= printBoard(knights);
+    resultStr+="\n";
+    resultStr+= "Bishops\n";
+    resultStr+= printBoard(bishops);
+    resultStr+="\n";
+    resultStr+= "Rooks\n";
+    resultStr+= printBoard(rooks);
+    resultStr+="\n";
+    resultStr+= "Queens\n";
+    resultStr+= printBoard(queens);
+    resultStr+="\n";
+    resultStr+= "Kings\n";
+    resultStr+= printBoard(kings);
+    resultStr+="\n";
+    return resultStr;
 }
         
 std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard

@@ -1,11 +1,12 @@
 #include "rbcagent.h"
+#include "chessinformationset.h"
 
 #include <cuda_runtime_api.h>
 #include <cuda.h>
 
 namespace crazyara {
 
-__device__ bool getBit
+__device__ bool RBCAgetBit
 (
     uint8_t byte,
     uint8_t position
@@ -13,7 +14,7 @@ __device__ bool getBit
 {
     return byte & (1 << position);
 }
-
+    
 __device__ void numberToChar
 (
     char** string,
@@ -55,23 +56,32 @@ __global__ void genFEN
 )
 {   
     unsigned int index = threadIdx.x + blockIdx.x * blockDim.x;
-    if(index < boardInfoSetSize)
+    __shared__ uint8_t selfBoard[58];
+    __shared__ char selfPiecesChar[6];
+    __shared__ char oppoPiecesChar[6];
+    if(threadIdx.x==0)
     {
-        __shared__ uint8_t selfBoard[58];
-        __shared__ char selfPiecesChar[6];
-        uint8_t oppoBoard[58];
-        __shared__ char oppoPiecesChar[6];
-        for(uint8_t byteInd=0; byteInd<58; byteInd++)
-        {
-            selfBoard[byteInd] = oppoBoardInfoSet[byteInd];
-            oppoBoard[byteInd] = selfBoardInfoSet[index*58+byteInd];
-        }
         for(uint8_t pieceInd=0; pieceInd<6; pieceInd++)
         {
-            selfPiecesChar[pieceInd] = oppoPieceCharSet[pieceInd];
-            oppoPiecesChar[pieceInd] = selfPieceCharSet[pieceInd];
+            oppoPiecesChar[pieceInd] = oppoPieceCharSet[pieceInd];
+            selfPiecesChar[pieceInd] = selfPieceCharSet[pieceInd];
         }
-        
+        for(uint8_t byteInd=0; byteInd<58; byteInd++)
+        {
+            selfBoard[byteInd] = selfBoardInfoSet[byteInd];
+        }
+    }
+    __syncthreads();
+    
+    if(index < boardInfoSetSize)
+    {
+        uint8_t oppoBoard[58];
+
+        for(uint8_t byteInd=0; byteInd<58; byteInd++)
+        {
+            oppoBoard[byteInd] = oppoBoardInfoSet[index*58+byteInd];
+        }
+
         char oneFenString[100];
         char* strFenIndex = oneFenString;
         
@@ -90,13 +100,13 @@ __global__ void genFEN
                     
                     uint8_t* selfPieceTypeStart = selfBoard + pieceByteOffset;
                     uint8_t* selfPieceTypeRowByte = selfPieceTypeStart + squareByteInd;
-                    bool selfPieceOnSquare = getBit(*selfPieceTypeRowByte,8-1-squareBitInd);
+                    bool selfPieceOnSquare = RBCAgetBit(*selfPieceTypeRowByte,8-1-squareBitInd);
                     squareItem = selfPieceOnSquare*((squareItem!=1)?'X':selfPiecesChar[pieceInd]) +
                                 !selfPieceOnSquare*squareItem;
                     
                     uint8_t* oppoPieceTypeStart = oppoBoard + pieceByteOffset;
                     uint8_t* oppoPieceTypeRowByte = oppoPieceTypeStart + squareByteInd;
-                    bool oppoPieceOnSquare = getBit(*oppoPieceTypeRowByte,8-1-squareBitInd);
+                    bool oppoPieceOnSquare = RBCAgetBit(*oppoPieceTypeRowByte,8-1-squareBitInd);
                     squareItem = oppoPieceOnSquare*((squareItem!=1)?'X':oppoPiecesChar[pieceInd]) +
                                 !oppoPieceOnSquare*squareItem;
                 }
@@ -142,21 +152,21 @@ __global__ void genFEN
         
         //Print castling rights
         uint8_t* castlingWhite = (selfColor=='w')?(selfBoard+48):(oppoBoard+48);        
-        bool castlingWhiteKingside = getBit(*castlingWhite,7);
+        bool castlingWhiteKingside = RBCAgetBit(*castlingWhite,7);
         *strFenIndex = 'K';
         if(castlingWhiteKingside)
             strFenIndex++;
-        bool castlingWhiteQueenside = getBit(*castlingWhite,6);
+        bool castlingWhiteQueenside = RBCAgetBit(*castlingWhite,6);
         *strFenIndex = 'Q';
         if(castlingWhiteQueenside)
             strFenIndex++;
         
         uint8_t* castlingBlack = (selfColor=='w')?(oppoBoard+48):(selfBoard+48);
-        bool castlingBlackKingside = getBit(*castlingBlack,7);
+        bool castlingBlackKingside = RBCAgetBit(*castlingBlack,7);
         *strFenIndex = 'k';
         if(castlingBlackKingside)
             strFenIndex++;
-        bool castlingBlackQueenside = getBit(*castlingBlack,6);
+        bool castlingBlackQueenside = RBCAgetBit(*castlingBlack,6);
         *strFenIndex = 'q';
         if(castlingBlackQueenside)
             strFenIndex++;
@@ -182,7 +192,7 @@ __global__ void genFEN
                 uint8_t byte_offset = (totalBitInd+offset)/8;
                 uint8_t bit_Ind = (totalBitInd+offset)%8;
                 uint8_t readByte = *(enPassant+byte_offset);
-                bool validEnPassant = getBit(readByte,7-bit_Ind);
+                bool validEnPassant = RBCAgetBit(readByte,7-bit_Ind);
                 bool doubleMatch = (validEnPassant && enPas[0]!='-');
                 enPas[0] = doubleMatch*'X' + !doubleMatch*enPas[0];
                 enPas[0] = validEnPassant*(col+'a') + !validEnPassant*enPas[0];
@@ -233,22 +243,45 @@ __global__ void genFEN
 void RBCAgent::FullChessInfo::getAllFEN_GPU
 (
     const CIS::OnePlayerChessInfo& self,
-    Player selfColor,
+    const PieceColor selfColor,
     std::unique_ptr<ChessInformationSet>& cis,
     const PieceColor nextTurn,
     const unsigned int nextCompleteTurn,
-    std::vector<std::string> allFEN
+    std::vector<std::string>& allFEN
 )
 {    
-    std::uint64_t cis_size = size();
+    std::uint64_t cis_size = cis->size();
     std::uint64_t cis_byte_size = cis_size*(chessInfoSize/8);
-    std::uint8_t* hostInfoSetPtr = getInfoSetPtr();
+    std::uint8_t* hostInfoSetPtr = cis->getInfoSetPtr();
     uint8_t* deviceOppoInfoSetPtr;
     CHECK(cudaMalloc((void**)&deviceOppoInfoSetPtr,cis_byte_size*sizeof(uint8_t)));
     CHECK(cudaMemcpy(deviceOppoInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice));
     
     std::cout<<"cis_size:"<<int(cis_size)<<std::endl;
     std::cout<<"cis_byte_size:"<<int(cis_byte_size)<<std::endl;
+    
+    std::vector<char> whitePieces = {'P','N','B','R','Q','K'};
+    std::vector<char> blackPieces = {'p','n','b','r','q','k'};
+    
+    char* deviceSelfPieceCharSet;
+    CHECK(cudaMalloc((void**)&deviceSelfPieceCharSet,6*sizeof(char)));
+    char* deviceOppoPieceCharSet;
+    CHECK(cudaMalloc((void**)&deviceOppoPieceCharSet,6*sizeof(char)));
+    char selfColorChar;
+    if(selfColor==PieceColor::white)
+    {
+        CHECK(cudaMemcpy(deviceSelfPieceCharSet,whitePieces.data(),6*sizeof(char),cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(deviceOppoPieceCharSet,blackPieces.data(),6*sizeof(char),cudaMemcpyHostToDevice));
+        selfColorChar = 'w';
+    }
+    else
+    {
+        CHECK(cudaMemcpy(deviceSelfPieceCharSet,blackPieces.data(),6*sizeof(char),cudaMemcpyHostToDevice));
+        CHECK(cudaMemcpy(deviceOppoPieceCharSet,whitePieces.data(),6*sizeof(char),cudaMemcpyHostToDevice));
+        selfColorChar = 'b';
+    }
+    
+    char turnColor = (nextTurn==PieceColor::white)?'w':'b';
     
     uint8_t* deviceSelfInfoSetPtr;
     CHECK(cudaMalloc((void**)&deviceSelfInfoSetPtr,58*sizeof(uint8_t)));
@@ -280,13 +313,13 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
     genFEN<<<grids,blocks>>>
     (
         deviceOppoInfoSetPtr,
-        char selfPieceCharSet[6], // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
-        char selfColor, // w or b
+        deviceOppoPieceCharSet, // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
+        selfColorChar, // w or b
         deviceSelfInfoSetPtr,
-        char opponentPieceCharSet[6], // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
-        char turnColor, // w or b
-        uint64_t boardInfoSetSize,
-        uint16_t nextMoveNumber,
+        deviceSelfPieceCharSet, // pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5
+        turnColor, // w or b
+        cis_size,
+        nextCompleteTurn,
         deviceFenVector
     );
     
@@ -295,11 +328,14 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
     CHECK(cudaMemcpy(hostFenVector.data(),deviceFenVector,cis_size*100*sizeof(char),cudaMemcpyDeviceToHost));
     for(uint index=0; index<hostFenVector.size(); index+=100)
     {
-        allFEN.push_back(hostFenVector.data()+index);
+        allFEN.push_back(std::string(hostFenVector.data()+index));
     }
+    std::cout<<allFEN.size()<<std::endl;
     
     cudaFree(deviceOppoInfoSetPtr);
+    cudaFree(deviceSelfPieceCharSet);
     cudaFree(deviceSelfInfoSetPtr);
+    cudaFree(deviceOppoPieceCharSet);
     cudaFree(deviceFenVector);
     
     std::cout<<"End of function"<<std::endl;

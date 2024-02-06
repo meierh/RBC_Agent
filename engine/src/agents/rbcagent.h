@@ -38,7 +38,6 @@
 namespace crazyara {
 
 class RBCAgent : public MCTSAgent
-
 {
     using CIS = ChessInformationSet;
     
@@ -88,11 +87,11 @@ private:
             static void getAllFEN_GPU
             (
                 const CIS::OnePlayerChessInfo& self,
-                Player selfColor,
+                const PieceColor selfColor,
                 std::unique_ptr<ChessInformationSet>& cis,
                 const PieceColor nextTurn,
                 const unsigned int nextCompleteTurn,
-                std::vector<std::string> allFEN
+                std::vector<std::string>& allFEN
             );
             
             std::string getFEN() const
@@ -278,11 +277,13 @@ private:
     
     FRIEND_TEST(rbcagentfullchessinfo_test, FEN_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, FENReconstruction_test);
+    FRIEND_TEST(rbcagentfullchessinfo_test, FENReconstructionGPU_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, FENSplitting_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, DecodeFENFigurePlacement_test);
     FRIEND_TEST(rbcagentfullchessinfo_test, Observation_test);
     FRIEND_TEST(chessinformationset_test, boardClause_test);
     FRIEND_TEST(chessinformationset_test, getIncompatibleGPU_test);
+    FRIEND_TEST(chessinformationset_test, getDistributionGPU_test);
 };
 }
 

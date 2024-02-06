@@ -118,6 +118,60 @@ TEST(rbcagentfullchessinfo_test, FENReconstruction_test)
     EXPECT_EQ(fci13.getFEN(),fen13);
 }
 
+TEST(rbcagentfullchessinfo_test, FENReconstructionGPU_test)
+{
+    using CIS = crazyara::ChessInformationSet;
+    using COL = CIS::ChessColumn;
+    using ROW = CIS::ChessRow;
+    using SQ = CIS::Square;
+    
+    std::vector<std::string> fens = 
+    {
+        "rnbqkbnr/pppppppp/8/8/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1"/*,
+        "rnbqkbnr/pp1pp1pp/2p5/5p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq f6 0 1",
+        "rnb1kbnr/pp1pp1pp/1qp5/5p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1",
+        "rnb1kbnr/pp2p1pp/1qpp4/5p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1",
+        "rnb1kbnr/1p2p1pp/pqpp4/5p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1",
+        "rnb1kbnr/1p2p1pp/pqp5/3p1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1",
+        "rnb1kb1r/1p2p1pp/pqp2n2/3p1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kkq - 0 1",
+        "1nb1kb1r/rp2p1pp/pqp2n2/3p1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kk - 0 1",
+        "1n2kb1r/rp2p1pp/pqp1bn2/3p1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kk - 0 1",
+        "1n2kb1r/rp4pp/pqppbn2/3p1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kk - 0 1",
+        "1n2kb1r/rp4pp/pq1pbn2/2pp1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kk - 0 1",
+        "1n2kb1r/rp5p/1q1pbnp1/p1pp1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kk - 0 1",
+        "1n2k2r/rp5p/1q1pbnpb/p1pp1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w Kk - 0 1",
+        "1n3rk1/rp5p/1q1pbnpb/p1pp1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1",
+        "1n3rk1/rp1b3p/1q1p1npb/p1pp1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1",
+        "1n3rk1/rp1b3p/3p1npb/pqpp1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1",
+        "1n3rk1/rp5p/2bp1npb/pqpp1p2/1B2P3/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1",
+        "1n3rk1/rp5p/2bp1npb/pqpp4/1B2P1p1/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1",
+        "1n3rk1/rp5p/2bp1np1/pqpp4/1B2Pbp1/NP1Q1NPP/P1P1P1P1/1R2KB1R w K - 0 1"*/
+    };
+    
+    auto cisUPtr = std::make_unique<CIS>();
+    CIS& cis = *cisUPtr;
+    for(std::string fen : fens)
+    {
+        RBCAgent::FullChessInfo fci(fen);
+        cis.add(fci.black,1);
+    }
+    
+    RBCAgent::FullChessInfo fciSelf(fens[0]);
+    
+    std::vector<std::string> allFEN;
+    RBCAgent::FullChessInfo::getAllFEN_GPU
+    (
+        fciSelf.white,
+        RBCAgent::PieceColor::white,
+        cisUPtr,
+        RBCAgent::PieceColor::white,
+        10,
+        allFEN
+    );
+    
+    EXPECT_EQ(allFEN,fens);
+}
+
 TEST(rbcagentfullchessinfo_test, FENSplitting_test)
 {
     using CIS = crazyara::ChessInformationSet;
