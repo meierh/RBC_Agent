@@ -270,7 +270,7 @@ std::unique_ptr<std::vector<std::uint8_t>> ChessInformationSet::checkBoardsValid
     return result;
 }
 
-__global__ void initialReduce // blockDim.x == 32
+__global__ void initialReduceDistr // blockDim.x == 32
 (
     uint8_t* boardInfoSet,
     uint64_t boardInfoSetSize,
@@ -332,8 +332,9 @@ __global__ void initialReduce // blockDim.x == 32
     }
 }
 
-__global__ void reduce // blockDim.x == 32
+__global__ void reduceDistr // blockDim.x == 32
 (
+    
     uint32_t* boardsIn,
     uint32_t boardInSize,
     uint32_t* boardsOut //gridsize * (64*6)
@@ -431,7 +432,7 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     uint32_t* deviceBoardSumOut;
     CHECK(cudaMalloc((void**)&deviceBoardSumOut,grids.x*6*64*sizeof(uint32_t)));
     
-    initialReduce<<<grids,blocks>>>
+    initialReduceDistr<<<grids,blocks>>>
     (
         deviceInfoSetPtr,
         cis_size,
@@ -448,7 +449,7 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
         grids = dim3(outGridSize);
         //std::cout<<"inGridSize:"<<inGridSize<<std::endl;
         //std::cout<<"outGridSize:"<<outGridSize<<std::endl;
-        reduce<<<grids,blocks>>>
+        reduceDistr<<<grids,blocks>>>
         (
             deviceBoardSumIn,
             inGridSize,
@@ -490,5 +491,319 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     std::memcpy(piecesDistro->kings.data(),  piecesSumDouble.data()+320,64*sizeof(double));
     //std::cout<<"Return"<<std::endl;
     return piecesDistro;
+}
+
+__global__ void initialReduceEntropy // blockDim.x == 32
+(
+    float* distribution, // 6*64
+    uint8_t* boardInfoSet,
+    uint64_t boardInfoSetSize,
+    float* squareEntropy, //gridsize * (64)
+    float* scanSquareEntropy //gridsize * (36)
+)
+{
+    __shared__ float distributionBoard[7][64];
+    for(uint8_t pieceInd=0; pieceInd<6; pieceInd++)
+    {
+        distributionBoard[pieceInd][threadIdx.x] = *(distribution+pieceInd*64+threadIdx.x);
+        distributionBoard[pieceInd][threadIdx.x+32] = *(distribution+pieceInd*64+threadIdx.x+32);
+    }
+    float emptyProb0 = 1;
+    float emptyProb32 = 1;
+    for(uint8_t pieceInd=0; pieceInd<6; pieceInd++)
+    {
+        emptyProb0 -= distributionBoard[pieceInd][threadIdx.x];
+        emptyProb32 -= distributionBoard[pieceInd][threadIdx.x+32];
+    }
+    distributionBoard[6][threadIdx.x] = emptyProb0;
+    distributionBoard[6][threadIdx.x+32] = emptyProb32;
+    __syncthreads();
+
+    __shared__ float locSquareEntropy[32][64];
+    for(uint8_t squareInd=0; squareInd<64; squareInd++)
+    {
+        locSquareEntropy[threadIdx.x][squareInd] = 0;
+    }
+    __shared__ float locScanSquareEntropy[32][36];
+    for(uint8_t squareInd=0; squareInd<36; squareInd++)
+    {
+        locScanSquareEntropy[threadIdx.x][squareInd] = 0;
+    }
+    __syncthreads();
+    
+
+    uint64_t boardSize = 58;
+    uint64_t blockSpan = ceilf((float)boardInfoSetSize / gridDim.x);
+    uint64_t blockOffset = blockIdx.x*blockSpan;
+    
+    // Reduce to 32 boards shared memory
+    uint8_t* blockStartPtr = boardInfoSet+blockOffset*boardSize;
+    uint64_t validBlockSpan = min(blockSpan,boardInfoSetSize-blockOffset);
+    for(uint64_t locIndex=threadIdx.x; locIndex<validBlockSpan; locIndex+=blockDim.x)
+    {
+        uint8_t* boardStart = blockStartPtr + locIndex*boardSize;
+        uint8_t* probabilityPtr = boardStart+57;
+        uint8_t board[6][8];
+        for(uint8_t pieceInd=0; pieceInd<6; pieceInd++)
+        {
+            for(uint8_t row=0; row<8; row++)
+            {
+                board[pieceInd][row] = *(boardStart + pieceInd*8 + row);
+            }
+        }
+
+        for(uint8_t row=0; row<8; row++)
+        {
+            for(uint8_t col=0; col<8; col++)
+            {
+                //Compute Entropy for one square
+                uint8_t linearIndFullBoard = row*8+col;
+                uint8_t pieceSubInd = 6;
+                for(uint8_t pieceInd=0; pieceInd<6; pieceInd)
+                {
+                    bool squareOccupied = CISgetBit(board[pieceInd][row],7-col);
+                    pieceSubInd = (squareOccupied)?pieceInd:pieceSubInd;
+                }
+                float prob = distributionBoard[pieceSubInd][linearIndFullBoard];
+                float entropy = -prob * log2f(prob);
+                locSquareEntropy[threadIdx.x][linearIndFullBoard] += entropy;
+                
+                //Compute entropy for a scare area
+                if(row>0 && row<7 && col>0 && col<7)
+                {
+                    uint8_t linearIndSenseBoard = (row-1)*6+(col-1);
+                    float senseProb = 1;
+                    for(uint8_t senseRow = row-1; senseRow<row+2; senseRow++)
+                    {
+                        for(uint8_t senseCol = col-1; senseCol<col+2; senseCol++)
+                        {
+                            uint8_t linearIndFullBoard = senseRow*8+senseCol;
+                            uint8_t pieceSubInd = 6;
+                            for(uint8_t pieceInd=0; pieceInd<6; pieceInd)
+                            {
+                                bool squareOccupied = CISgetBit(board[pieceInd][senseRow],7-senseCol);
+                                pieceSubInd = (squareOccupied)?pieceInd:pieceSubInd;
+                            }
+                            float prob = distributionBoard[pieceSubInd][linearIndFullBoard];
+                            senseProb *= prob;
+                        }
+                    }
+                    float entropy = -senseProb * log2f(senseProb);
+                    locScanSquareEntropy[threadIdx.x][linearIndSenseBoard] += entropy;
+                }
+            }            
+        }
+    }
+    __syncthreads();
+    
+    for(uint8_t size=1; size<32; size++)
+    {
+        locSquareEntropy[0][threadIdx.x] +=  locSquareEntropy[size][threadIdx.x];
+        locSquareEntropy[0][threadIdx.x+32] +=  locSquareEntropy[size][threadIdx.x+32];
+        locScanSquareEntropy[0][threadIdx.x] +=  locScanSquareEntropy[size][threadIdx.x];
+        if(threadIdx.x+32<36)
+        {
+            locScanSquareEntropy[0][threadIdx.x+32] +=  locScanSquareEntropy[size][threadIdx.x+32];
+        }
+    }
+    __syncthreads();
+    
+    float* squareEntropyOffset = squareEntropy + blockIdx.x*(64);
+    *(squareEntropyOffset+threadIdx.x) = locSquareEntropy[0][threadIdx.x];
+    *(squareEntropyOffset+threadIdx.x+32) = locSquareEntropy[0][threadIdx.x+32];
+    
+    float* scanEntropyOffset = scanSquareEntropy + blockIdx.x*(36);
+    *(scanEntropyOffset+threadIdx.x) = locScanSquareEntropy[0][threadIdx.x];
+    if(threadIdx.x+32<36)
+    {
+        *(scanEntropyOffset+threadIdx.x+32) = locScanSquareEntropy[0][threadIdx.x+32];
+    }
+}
+
+__global__ void reduceEntropy // blockDim.x == 32
+(
+    float* squareEntropyIn,
+    float* scanSquareEntropyIn,
+    uint32_t inSize,
+    float* squareEntropyOut, //gridsize * (64)
+    float* scanSquareEntropyOut //gridsize * (36)
+)
+{
+    __shared__ float locSquareEntropy[32][64];
+    for(uint8_t squareInd=0; squareInd<64; squareInd++)
+    {
+        locSquareEntropy[threadIdx.x][squareInd] = 0;
+    }
+    __shared__ float locScanSquareEntropy[32][36];
+    for(uint8_t squareInd=0; squareInd<36; squareInd++)
+    {
+        locScanSquareEntropy[threadIdx.x][squareInd] = 0;
+    }
+    __syncthreads();
+    
+    uint64_t blockSpan = ceilf((float)inSize / gridDim.x);
+    uint64_t blockOffset = blockIdx.x*blockSpan;
+    uint64_t blockOffsetDataSquareEntropy = blockOffset*64;
+    uint64_t blockOffsetDataScanEntropy = blockOffset*36;
+    
+    for(uint64_t locIndex = 0; locIndex+threadIdx.x<blockSpan; locIndex+=blockDim.x)
+    {
+        float* squareEntropy = squareEntropyIn + blockOffsetDataSquareEntropy + (locIndex+threadIdx.x)*64;
+        for(uint8_t squareInd=0; squareInd<64; squareInd++)
+        {
+            locSquareEntropy[threadIdx.x][squareInd] += *(squareEntropy + threadIdx.x*64 + squareInd);
+        }
+        float* scanEntropy = scanSquareEntropyIn + blockOffsetDataScanEntropy + (locIndex+threadIdx.x)*36;
+        for(uint8_t squareInd=0; squareInd<36; squareInd++)
+        {
+            locScanSquareEntropy[threadIdx.x][squareInd] += *(scanEntropy + threadIdx.x*36 + squareInd);
+        }
+    }
+    __syncthreads();
+    
+    for(uint8_t size=1; size<32; size++)
+    {
+        locSquareEntropy[0][threadIdx.x] +=  locSquareEntropy[size][threadIdx.x];
+        locSquareEntropy[0][threadIdx.x+32] +=  locSquareEntropy[size][threadIdx.x+32];
+        locScanSquareEntropy[0][threadIdx.x] +=  locScanSquareEntropy[size][threadIdx.x];
+        if(threadIdx.x+32<36)
+        {
+            locScanSquareEntropy[0][threadIdx.x+32] +=  locScanSquareEntropy[size][threadIdx.x+32];
+        }
+    }
+    __syncthreads();
+    
+    float* squareEntropyOffset = squareEntropyOut + blockIdx.x*(64);
+    *(squareEntropyOffset+threadIdx.x) = locSquareEntropy[0][threadIdx.x];
+    *(squareEntropyOffset+threadIdx.x+32) = locSquareEntropy[0][threadIdx.x+32];
+    
+    float* scanEntropyOffset = scanSquareEntropyOut + blockIdx.x*(36);
+    *(scanEntropyOffset+threadIdx.x) = locScanSquareEntropy[0][threadIdx.x];
+    if(threadIdx.x+32<36)
+    {
+        *(scanEntropyOffset+threadIdx.x+32) = locScanSquareEntropy[0][threadIdx.x+32];
+    }
+}
+
+std::unique_ptr<std::pair<std::array<double,64>,std::array<double,36>>> ChessInformationSet::computeEntropyGPU
+(
+    const Distribution& hypotheseDistro
+)
+{
+    
+    std::array<double,384> distributionfp64;
+    std::memcpy(distributionfp64.data(),    hypotheseDistro.pawns.data(),  64*sizeof(double));
+    std::memcpy(distributionfp64.data()+64, hypotheseDistro.knights.data(),64*sizeof(double));
+    std::memcpy(distributionfp64.data()+128,hypotheseDistro.bishops.data(),64*sizeof(double));
+    std::memcpy(distributionfp64.data()+192,hypotheseDistro.rooks.data(),  64*sizeof(double));
+    std::memcpy(distributionfp64.data()+256,hypotheseDistro.queens.data(), 64*sizeof(double));
+    std::memcpy(distributionfp64.data()+320,hypotheseDistro.kings.data(),  64*sizeof(double));
+    
+    std::array<float,384> distributionfp32;
+    for(uint i=0; i<distributionfp32.size(); i++)
+        distributionfp32[i] = distributionfp64[i];
+    float* deviceDistribution;
+    CHECK(cudaMalloc((void**)&deviceDistribution,distributionfp32.size()*sizeof(float)));
+    CHECK(cudaMemcpy(deviceDistribution,distributionfp32.data(),distributionfp32.size()*sizeof(float),cudaMemcpyHostToDevice));    
+    
+    //std::cout<<"Compute Distribution"<<std::endl;
+    std::uint64_t cis_size = size();
+    std::uint64_t maxSize = 1;
+    maxSize = maxSize<<32;
+    if(cis_size >= maxSize)
+    {
+        std::cout<<"cis_size:"<<cis_size<<" > "<<maxSize<<std::endl;
+        throw std::invalid_argument("CIS size too big");
+    }
+    std::uint64_t cis_byte_size = cis_size*(chessInfoSize/8);
+    std::uint8_t* hostInfoSetPtr = getInfoSetPtr();
+    uint8_t* deviceInfoSetPtr;
+    CHECK(cudaMalloc((void**)&deviceInfoSetPtr,cis_byte_size*sizeof(uint8_t)));
+    CHECK(cudaMemcpy(deviceInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice));
+    
+    
+    dim3 blocks(32);
+    
+    std::uint64_t maxNbrBlocks = 60000;
+    std::uint64_t boardsPerBlock = cis_size / maxNbrBlocks;
+    std::uint64_t boardsPerThread = boardsPerBlock / blocks.x;
+    std::uint64_t minBoardsPerThread = 8;
+    if(boardsPerThread < minBoardsPerThread)
+        boardsPerThread = minBoardsPerThread;    
+    dim3 grids(ceil((float)cis_size/(blocks.x*boardsPerThread)));
+
+    //std::cout<<"blocks.x:"<<blocks.x<<std::endl;
+    //std::cout<<"grids.x:"<<grids.x<<std::endl;
+    
+    float* squareEntropyIn;
+    CHECK(cudaMalloc((void**)&squareEntropyIn,grids.x*64*sizeof(float)));
+    
+    float* squareEntropyOut;
+    CHECK(cudaMalloc((void**)&squareEntropyOut,grids.x*64*sizeof(float)));
+    
+    float* scanSquareEntropyIn;
+    CHECK(cudaMalloc((void**)&scanSquareEntropyIn,grids.x*36*sizeof(float)));
+    
+    float* scanSquareEntropyOut;
+    CHECK(cudaMalloc((void**)&scanSquareEntropyOut,grids.x*36*sizeof(float)));
+    
+    initialReduceEntropy<<<grids,blocks>>>
+    (
+        deviceDistribution,
+        deviceInfoSetPtr,
+        cis_size,
+        squareEntropyIn,
+        scanSquareEntropyIn
+    );
+    cudaDeviceSynchronize();
+    //std::cout<<"Initial reduction"<<std::endl;
+    
+    std::uint64_t inGridSize = grids.x;
+    std::uint64_t outGridSize;
+    while(inGridSize>1)
+    {
+        outGridSize = ceil((float)inGridSize / 128);
+        grids = dim3(outGridSize);
+        reduceEntropy<<<grids,blocks>>>
+        (
+            squareEntropyIn,
+            scanSquareEntropyIn,
+            inGridSize,
+            squareEntropyOut,
+            scanSquareEntropyOut
+        );
+        cudaDeviceSynchronize();
+        inGridSize = outGridSize;
+        float* temp;
+        
+        temp = squareEntropyIn;
+        squareEntropyIn = squareEntropyOut;
+        squareEntropyOut = temp;
+        
+        temp = scanSquareEntropyIn;
+        scanSquareEntropyIn = scanSquareEntropyOut;
+        scanSquareEntropyOut = temp;
+    }
+    //std::cout<<"Copy result back"<<std::endl;
+    std::array<float,64> squareEntropy;
+    CHECK(cudaMemcpy(squareEntropy.data(),squareEntropyIn,64*sizeof(float),cudaMemcpyDeviceToHost));
+    
+    std::array<float,36> scanSquareEntropy;
+    CHECK(cudaMemcpy(scanSquareEntropy.data(),scanSquareEntropyIn,36*sizeof(float),cudaMemcpyDeviceToHost));
+        
+    cudaFree(deviceDistribution);
+    cudaFree(deviceInfoSetPtr);
+    cudaFree(squareEntropyIn);
+    cudaFree(scanSquareEntropyIn);
+    cudaFree(squareEntropyOut);
+    cudaFree(scanSquareEntropyOut);
+    
+    auto result = std::make_unique<std::pair<std::array<double,64>,std::array<double,36>>>();
+    for(uint i=0; i<result->first.size(); i++)
+        result->first[i] = squareEntropy[i];
+    for(uint i=0; i<result->second.size(); i++)
+        result->second[i] = scanSquareEntropy[i];
+    
+    return result;
 }
 }

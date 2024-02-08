@@ -442,6 +442,11 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         
         std::unique_ptr<Distribution> computeDistributionGPU();
         
+        std::unique_ptr<std::pair<std::array<double,64>,std::array<double,36>>> computeEntropyGPU
+        (
+            const Distribution&
+        );
+        
         /**
          * Marks boards incompatible with observations
          * @param noPieces

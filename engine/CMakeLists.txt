@@ -99,15 +99,6 @@ if (USE_DYNAMIC_NN_ARCH)
     add_definitions(-DDYNAMIC_NN_ARCH)
 endif()
 
-find_package(CUDAToolkit REQUIRED)
-find_package(Threads REQUIRED)
-enable_language(CUDA)
-
-#set(cuda_separable_compilation on)
-
-#set_target_properties(OpenSpielAra PROPERTIES CUDA_SEPARABLE_COMPILATION ON)
-#set_target_properties(OpenSpielAra PROPERTIES CUDA_RESOLVE_DEVICE_SYMBOLS ON) 
-
 # -pg performance profiling flags
 if (USE_PROFILING)
     SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pg")
@@ -508,6 +499,10 @@ if (BACKEND_TENSORRT)
     add_definitions(-DTENSORRT)
 endif()
 
+enable_language(CUDA)
+#set_source_files_properties(src/agents/chessinformationset.cu PROPERTIES LANGUAGE CUDA)
+#set_source_files_properties(src/agents/rbcagent.cu PROPERTIES LANGUAGE CUDA)
+
 add_executable(${PROJECT_NAME} ${source_files})
 
 #target_compile_options(unittests PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: --generate-line-info --use_fast_math --relocatable-device-code=true>)
@@ -578,5 +573,11 @@ message(STATUS ${UNIT_LINKED})
 
 gtest_discover_tests(unittests)
 
-
+#set_property(GLOBAL PROPERTY GLOBAL_DEPENDS_DEBUG_MODE 1)
 #target_compile_options(unittests PRIVATE $<$<COMPILE_LANGUAGE:CUDA>: --generate-line-info --use_fast_math --relocatable-device-code=true>)
+
+
+get_target_property(OUT ${PROJECT_NAME} LINK_LIBRARIES)
+message(STATUS ${OUT})
+get_target_property(OUT unittests LINK_LIBRARIES)
+message(STATUS ${OUT})

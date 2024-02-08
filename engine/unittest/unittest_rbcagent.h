@@ -344,13 +344,18 @@ TEST(rbcagentfullchessinfo_test, Observation_test)
     std::string rbcModelsDir = "/home/helge/Uni/Semester_21/Bachelorthesis/RBC_Agent/model/params";
     SearchSettings sSet;
     PlaySettings pSet;
+    std::cout<<"IniCreated NN"<<std::endl;
     auto netSingle = std::make_unique<TensorrtAPI>(int(0), 1, rbcModelsDir, "float32");
+    std::cout<<"Created NN"<<std::endl;
     vector<unique_ptr<NeuralNetAPI>> netBatches;
     for(int i=0;i<sSet.threads;i++)
         netBatches.push_back(make_unique<TensorrtAPI>(int(0), 1, rbcModelsDir, "float32"));
+    std::cout<<"Created NN Batch"<<std::endl;
     std::string initialFen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     auto whitePlayer = std::make_unique<RBCAgent>(netSingle.get(),netBatches, &sSet, &pSet, initialFen, RBCAgent::PieceColor::white);
+    std::cout<<"Created White"<<std::endl;
     auto blackPlayer = std::make_unique<RBCAgent>(netSingle.get(),netBatches, &sSet, &pSet, initialFen, RBCAgent::PieceColor::black);
+    std::cout<<"Created Black"<<std::endl;
     OpenSpielState rbcState(open_spiel::gametype::SupportedOpenSpielVariants::RBC);
 
     

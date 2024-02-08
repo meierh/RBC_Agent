@@ -79,6 +79,8 @@ private:
     SampleUniquePtr<nvinfer1::IExecutionContext> context;
     cudaStream_t stream;
     bool generatedTrtFromONNX;
+    
+    nvinfer1::IRuntime* runtime;
 public:
     /**
      * @brief TensorrtAPI

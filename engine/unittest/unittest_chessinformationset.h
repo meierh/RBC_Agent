@@ -699,7 +699,5 @@ TEST(chessinformationset_test, getDistributionGPU_test)
             cis1.add(fci1.black,1);
     
     std::unique_ptr<CIS::Distribution> incompBoards = cis1.computeDistributionGPU();
-    //std::cout<<incompBoards->printComplete()<<std::endl;
-    //std::cout<<"End of test"<<std::endl;
 }
 };
