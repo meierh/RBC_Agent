@@ -1362,11 +1362,21 @@ ChessInformationSet::Square RBCAgent::selectScanAction
 {
     using CIS=ChessInformationSet;
     
-    unsigned short col = randomScanDist(gen);
-    unsigned short row = randomScanDist(gen);
-    CIS::Square randomScanSq = {static_cast<CIS::ChessColumn>(col),static_cast<CIS::ChessRow>(row)};
-    return randomScanSq;
-    //return CIS::Square{CIS::ChessColumn::F,CIS::ChessRow::six};
+    std::unique_ptr<CIS::Distribution> hypothesisDistro = cis->computeDistributionGPU();
+    cis->computeEntropyGPU(*hypothesisDistro);
+    
+    std::uint8_t maxEntropyIndex;
+    double maxEntropy = 0;
+    const std::array<double,36>& scanSquareEntropy = hypothesisDistro->scanSquareEntropy;
+    for(std::uint8_t scanIndex=0; scanIndex<scanSquareEntropy.size(); scanIndex++)
+    {
+        if(maxEntropy <= scanSquareEntropy[scanIndex])
+        {
+            maxEntropy = scanSquareEntropy[scanIndex];
+            maxEntropyIndex = scanIndex;
+        }
+    }    
+    return CIS::scanBoardIndexToSquare(maxEntropyIndex);
 }
 
 std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
@@ -1375,31 +1385,20 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
     
     using CIS = ChessInformationSet;
     
+    std::unique_ptr<CIS::Distribution> hypothesisDistro = cis->computeDistributionGPU();
+    std::uint64_t mostProbableBoardIndex = cis->computeMostProbableBoard(*hypothesisDistro);
+    
     //std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
     //std::cout<<"cis->size():"<<cis->size()<<std::endl;
-
-    randomHypotheseSelect = std::uniform_int_distribution<std::uint64_t>(0,cis->validSize()-1);
-    std::uint64_t selectedBoard = randomHypotheseSelect(gen);
-    //std::cout<<"Selected Board:"<<selectedBoard<<std::endl;
-    auto iter = cis->begin();
-    //std::cout<<"Created Iterator"<<std::endl;
-    //std::cout<<"getCurrentIndex:"<<iter.getCurrentIndex()<<std::endl;
-    for(int i=0;i<selectedBoard;i++)
-    {
-        if(iter==cis->end())
-            iter = cis->begin();
-        else
-            iter++;
-    }
-    //std::cout<<"Enter iterator"<<std::endl;
-    //std::cout<<"getCurrentIndex:"<<iter.getCurrentIndex()<<std::endl;
-    if(iter == cis->end())
-    {
-        std::cout<<"Selected Board: "<<selectedBoard<<" from size:"<<cis->size()<<std::endl;
-        throw std::logic_error("Chess information set is empty");
-    }    
-    std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,double>> selectedHypothese = *iter;
     
+    cis->clearRemoved(false);
+    
+    if(mostProbableBoardIndex<0 || mostProbableBoardIndex>=cis->size())
+    {
+        throw std::logic_error("Most probable board out of bounds");
+    }
+    std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,double>> selectedHypothese;
+    selectedHypothese = cis->getBoard(mostProbableBoardIndex);    
     //std::cout<<"cis->size():"<<cis->size()<<std::endl;
     //std::cout<<"selectedBoard:"<<selectedBoard<<std::endl;
     
@@ -1438,6 +1437,7 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
 
 StateObj* RBCAgent::setupMoveSearchState()
 {
+    
     chessState = new OpenSpielState(open_spiel::gametype::SupportedOpenSpielVariants::CHESS);
     std::unique_ptr<FullChessInfo> searchState = selectHypothese();
     chessState->set(searchState->getFEN(),false,open_spiel::gametype::SupportedOpenSpielVariants::CHESS);
@@ -1559,31 +1559,72 @@ void RBCAgent::handleOpponentMoveInfo
     if(cis->size()<1 || cis->size()!=cis->validSize())
         throw std::logic_error("Advancing hypotheses from invalid cis size");    
     
-    std::vector<std::uint64_t> cisInds;
-    for(auto iter=cis->begin(); iter!=cis->end(); iter++)
+    if(false && useGPU)
     {
-        //std::cout<<"Iter:"<<std::endl;
-        std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,double>> oldHypothese = *iter;
-        CIS::OnePlayerChessInfo& hypoPiecesOpponent = oldHypothese->first;
-        double probability = (*iter)->second;
-        std::unique_ptr<std::vector<std::pair<CIS::OnePlayerChessInfo,double>>> newHypotheses;
-        newHypotheses = generateHypotheses(hypoPiecesOpponent,conditions);
-        for(auto& oneHypothese : *newHypotheses)
-            oneHypothese.second = probability;
-        cisInds.push_back(iter.getCurrentIndex());
-        
-        try
+        /*
+        std::vector<std::uint64_t> cisInds;
+        std::vector<char> fenCharVector;
+        unsigned int nextCompleteTurn;
+        PieceColor nextTurn;
+        if(selfColor == PieceColor::white)
         {
-            newCis->add(*newHypotheses);
+            nextTurn = PieceColor::black;
+            nextCompleteTurn = currentTurn;
         }
-        catch(const std::bad_alloc& e)
+        else
         {
-            cis->remove(cisInds);
-            cis->clearRemoved();
-            iter = cis->begin();
-            newCis->add(*newHypotheses);
+            nextTurn = PieceColor::black;
+            nextCompleteTurn = currentTurn+1;
+        }
+        FullChessInfo::getAllFEN_GPU(playerPiecesTracker,selfColor,cis,nextTurn,nextCompleteTurn,fenCharVector);
+        cis = std::make_unique<CIS>();
+        std::vector<std::pair<CIS::OnePlayerChessInfo,double>> newHypothesesList;
+        newHypothesesList.reserve(fenCharVector.size()*0.2);
+        for(uint index=0; index<fenCharVector.size(); index+=100)
+        {
+            std::string oneStateFen = std::string(fenCharVector.data()+index);
+            
+            std::unique_ptr<std::vector<std::pair<CIS::OnePlayerChessInfo,double>>> newHypotheses;
+            newHypotheses = generateHypotheses(oneStateFen,conditions);
+            cisInds.push_back(index);
+            
+            for(std::pair<CIS::OnePlayerChessInfo,double> hypo : *newHypotheses)
+            {
+                newHypothesesList.push_back(hypo);
+            }
+        }
+        newCis->add(newHypothesesList);
+        */
+    }
+    else
+    {
+        std::vector<std::uint64_t> cisInds;
+        for(auto iter=cis->begin(); iter!=cis->end(); iter++)
+        {
+            //std::cout<<"Iter:"<<std::endl;
+            std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,double>> oldHypothese = *iter;
+            CIS::OnePlayerChessInfo& hypoPiecesOpponent = oldHypothese->first;
+            double probability = (*iter)->second;
+            std::unique_ptr<std::vector<std::pair<CIS::OnePlayerChessInfo,double>>> newHypotheses;
+            newHypotheses = generateHypotheses(hypoPiecesOpponent,conditions);
+            for(auto& oneHypothese : *newHypotheses)
+                oneHypothese.second = probability;
+            cisInds.push_back(iter.getCurrentIndex());
+            
+            try
+            {
+                newCis->add(*newHypotheses);
+            }
+            catch(const std::bad_alloc& e)
+            {
+                cis->remove(cisInds);
+                cis->clearRemoved();
+                iter = cis->begin();
+                newCis->add(*newHypotheses);
+            }
         }
     }
+    
     std::uint64_t prevSize1 = cis->validSize();
     cis = std::move(newCis);
     std::uint64_t currSize1 = cis->validSize();
@@ -1592,7 +1633,14 @@ void RBCAgent::handleOpponentMoveInfo
     
     
     std::uint64_t prevSize2 = cis->validSize();
-    cis->markIncompatibleBoards(conditions);
+    if(useGPU)
+    {
+        cis->markIncompatibleBoardsGPU(conditions);
+    }
+    else
+    {
+        cis->markIncompatibleBoards(conditions);
+    }
     cis->removeIncompatibleBoards();
     std::uint64_t currSize2 = cis->validSize();
     std::cout<<"Reduction done: Reduced information set from "<<prevSize2<<" to "<<currSize2<<std::endl;
@@ -1662,10 +1710,6 @@ std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,do
     if(selfColor == PieceColor::empty)
         throw std::invalid_argument("selfColor must not be PieceColor::empty");
     
-    using CIS_Square = ChessInformationSet::Square;
-    using CIS_CPI = ChessInformationSet::OnePlayerChessInfo;
-    auto hypotheses = std::make_unique<std::vector<std::pair<CIS_CPI,double>>>();
-    
     FullChessInfo fullState;
     unsigned int nextCompleteTurn;
     
@@ -1688,6 +1732,22 @@ std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,do
     std::string fen = fullState.getFEN();
     //std::cout<<"Player:"<<selfColor<<" generates Hypotheses of state of player:"<<opponentColor<<" from: "<<fen<<std::endl;
     //std::cout<<"Construct state for possible moves:"<<fen<<std::endl;
+    return generateHypotheses(piecesOpponent,piecesSelf,selfColor,fen,conditions);
+}
+
+std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> RBCAgent::generateHypotheses
+(
+    ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
+    ChessInformationSet::OnePlayerChessInfo& piecesSelf,
+    const RBCAgent::PieceColor selfColor,
+    std::string fen,
+    const std::vector<ChessInformationSet::BoardClause> conditions
+) const
+{
+    using CIS_Square = ChessInformationSet::Square;
+    using CIS_CPI = ChessInformationSet::OnePlayerChessInfo;
+    auto hypotheses = std::make_unique<std::vector<std::pair<CIS_CPI,double>>>();
+    
     OpenSpielState hypotheticState(open_spiel::gametype::SupportedOpenSpielVariants::RBC);
     hypotheticState.set(fen,false,open_spiel::gametype::SupportedOpenSpielVariants::RBC);
     hypotheticState.do_action(0); // Dummy sense to get to moving phase
@@ -1827,6 +1887,16 @@ std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,do
 )
 {
     return generateHypotheses(piecesOpponent,this->playerPiecesTracker,this->selfColor,conditions);
+}
+
+std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> RBCAgent::generateHypotheses
+(
+    ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
+    std::string fen,
+    const std::vector<ChessInformationSet::BoardClause> conditions
+)
+{
+    return generateHypotheses(piecesOpponent,this->playerPiecesTracker,this->selfColor,fen,conditions);
 }
 
 void RBCAgent::handleSelfMoveInfo

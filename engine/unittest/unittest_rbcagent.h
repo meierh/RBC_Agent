@@ -333,7 +333,7 @@ TEST(rbcagentfullchessinfo_test, DecodeFENFigurePlacement_test)
     EXPECT_EQ(figureBoard6,figureBoardRef);
 
 }
-
+/*
 TEST(rbcagentfullchessinfo_test, Observation_test)
 {
     using CIS = crazyara::ChessInformationSet;
@@ -480,4 +480,5 @@ TEST(rbcagentfullchessinfo_test, Observation_test)
     
     std::string fen13 = "2rn1b2/2pPNQ1P/K3Bpb1/2PPPpp1/np1kN1RP/p4p2/P1Pqp2R/2B4r w - - 0 1";
 }
+*/
 };

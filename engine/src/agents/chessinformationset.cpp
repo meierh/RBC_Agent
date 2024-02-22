@@ -437,6 +437,23 @@ std::string ChessInformationSet::Distribution::printBoard
     return resultBoard;
 }
 
+std::string ChessInformationSet::Distribution::printBoard
+(
+    const std::array<double,36>& piecesDistro
+) const
+{
+    std::array<double,64> board;
+    std::fill(board.begin(),board.end(),0);
+    for(std::uint8_t scanIndex=0; scanIndex<piecesDistro.size(); scanIndex++)
+    {
+        Square sq = scanBoardIndexToSquare(scanIndex);
+        //std::cout<<uint(scanIndex)<<"  sq "<<sq.to_string()<<":  "<<piecesDistro[scanIndex]<<std::endl;
+        std::uint8_t boardIndex = squareToBoardIndex(sq);
+        board[boardIndex] = piecesDistro[scanIndex];
+    }
+    return printBoard(board);
+}
+
 std::string ChessInformationSet::Distribution::printComplete() const
 {
     std::string resultStr;
@@ -457,6 +474,12 @@ std::string ChessInformationSet::Distribution::printComplete() const
     resultStr+="\n";
     resultStr+= "Kings\n";
     resultStr+= printBoard(kings);
+    resultStr+="\n";
+    resultStr+= "squareEntropy\n";
+    resultStr+= printBoard(squareEntropy);
+    resultStr+="\n";
+    resultStr+= "scanSquareEntropy\n";
+    resultStr+= printBoard(scanSquareEntropy);
     resultStr+="\n";
     return resultStr;
 }
@@ -623,6 +646,53 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     
     return cis_distribution;    
 }
+
+void ChessInformationSet::computeEntropy
+(
+    Distribution& hypotheseDistro
+)
+{
+    /*
+    std::fill(hypotheseDistro.squareEntropy.begin(),hypotheseDistro.squareEntropy.end(),0);
+    std::fill(hypotheseDistro.scanSquareEntropy.begin(),hypotheseDistro.scanSquareEntropy.end(),0);
+    
+    for(auto iter=this->begin(); iter!=this->end(); iter++)
+    {
+        OnePlayerChessInfo& hypoPiecesOpponent = (*iter)->first;
+        std::function<std::pair<bool,PieceType>(const Square&)> squareToPiece;
+        squareToPiece = hypoPiecesOpponent.getSquarePieceTypeCheck();
+
+        std::array<double,64> p_sq_Hypo;
+        for(std::uint8_t ind=0; ind<p_sq_Hypo.size(); ind++)
+        {
+            std::pair<bool,PieceType> pieceInfo = squareToPiece(boardIndexToSquare(ind));
+            PieceType pT = PieceType::empty;
+            if(pieceInfo.first)
+                pT = pieceInfo.second;
+            p_sq_Hypo[ind] = p_sq_PT->getProbability(ind,pT);
+        }
+
+        for(std::uint8_t colI=1; colI<7; colI++)
+        {
+            for(std::uint8_t rowI=1; rowI<7; rowI++)
+            {
+                Square sq(static_cast<ChessColumn>(colI),static_cast<ChessRow>(rowI));
+                std::pair<std::array<std::uint8_t,9>,std::array<Square,9>> sensingArea;
+                sensingArea = getSensingBoardIndexes(sq);
+                double sensingAreaProb=1;
+                for(uint i=0; i<sensingArea.first.size(); i++)
+                {
+                    sensingAreaProb *= p_sq_Hypo[sensingArea.first[i]];
+                }
+                
+                std::uint8_t boardInd = squareToBoardIndex(sq);
+                sensingEntropy[boardInd] += (sensingAreaProb*std::log2(sensingAreaProb));                
+            }
+        }
+    }
+    */
+}
+
 
 void ChessInformationSet::add
 (

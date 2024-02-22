@@ -700,4 +700,61 @@ TEST(chessinformationset_test, getDistributionGPU_test)
     
     std::unique_ptr<CIS::Distribution> incompBoards = cis1.computeDistributionGPU();
 }
+
+TEST(chessinformationset_test, getEntropyGPU_test)
+{
+    using BC = ChessInformationSet::BoardClause;
+    using SQ = ChessInformationSet::Square;
+    using COL = ChessInformationSet::ChessColumn;
+    using ROW = ChessInformationSet::ChessRow;
+    using PT = ChessInformationSet::BoardClause::PieceType;
+    using CIS = ChessInformationSet;
+    CIS cis1;
+    
+    std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    RBCAgent::FullChessInfo fci1(fen1);
+
+    /*
+    for(uint i=0; i<1000; i++)
+        if(i%2==0)
+            cis1.add(fci1.white,1);
+        else
+            cis1.add(fci1.black,1);
+    */
+    cis1.add(fci1.white,1);
+    cis1.add(fci1.black,1);
+
+    std::unique_ptr<CIS::Distribution> incompBoards = cis1.computeDistributionGPU();
+    cis1.computeEntropyGPU(*incompBoards);
+    std::cout<<incompBoards->printComplete()<<std::endl;
+    cis1.computeEntropyGPU(*incompBoards);
+}
+
+TEST(chessinformationset_test, getMostProbable_test)
+{
+    using BC = ChessInformationSet::BoardClause;
+    using SQ = ChessInformationSet::Square;
+    using COL = ChessInformationSet::ChessColumn;
+    using ROW = ChessInformationSet::ChessRow;
+    using PT = ChessInformationSet::BoardClause::PieceType;
+    using CIS = ChessInformationSet;
+    CIS cis1;
+    
+    std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    RBCAgent::FullChessInfo fci1(fen1);
+
+    cis1.add(fci1.white,1);
+    cis1.add(fci1.white,1);
+    cis1.add(fci1.black,1);
+    cis1.add(fci1.white,1);
+    cis1.add(fci1.black,1);
+    for(int i=0; i<20000; i++)
+        cis1.add(fci1.black,1);
+    for(int i=0; i<30000; i++)
+        cis1.add(fci1.white,1);
+
+    std::unique_ptr<CIS::Distribution> incompBoards = cis1.computeDistributionGPU();
+    std::uint64_t mostProb = cis1.computeMostProbableBoard(*incompBoards);
+    EXPECT_EQ(mostProb,0);
+}
 };

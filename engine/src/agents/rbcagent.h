@@ -54,6 +54,7 @@ public:
 private:   
     enum Player {Self, Opponent};
     enum MovePhase : std::uint8_t {Sense=0,Move=1};
+    bool useGPU = true;
     
     static open_spiel::chess::Color AgentColor_to_OpenSpielColor(const PieceColor agent_pC);
     static PieceColor OpenSpielColor_to_RBCColor(const open_spiel::chess::Color os_pC);
@@ -92,6 +93,16 @@ private:
                 const PieceColor nextTurn,
                 const unsigned int nextCompleteTurn,
                 std::vector<std::string>& allFEN
+            );
+            
+            static void getAllFEN_GPU
+            (
+                CIS::OnePlayerChessInfo& self,
+                const PieceColor selfColor,
+                std::unique_ptr<ChessInformationSet>& cis,
+                const PieceColor nextTurn,
+                const unsigned int nextCompleteTurn,
+                std::vector<char>& fenCharVector
             );
             
             std::string getFEN() const
@@ -182,6 +193,15 @@ public:
         const PieceColor selfColor,
         const std::vector<ChessInformationSet::BoardClause> conditions = {}
     ) const;
+    
+    std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> generateHypotheses
+    (
+        ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
+        ChessInformationSet::OnePlayerChessInfo& piecesSelf,
+        const RBCAgent::PieceColor selfColor,
+        std::string fen,
+        const std::vector<ChessInformationSet::BoardClause> conditions = {}
+    ) const;
 
 private:
     /**
@@ -192,6 +212,13 @@ private:
     std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> generateHypotheses
     (
         ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
+        const std::vector<ChessInformationSet::BoardClause> conditions = {}
+    );
+    
+    std::unique_ptr<std::vector<std::pair<ChessInformationSet::OnePlayerChessInfo,double>>> generateHypotheses
+    (
+        ChessInformationSet::OnePlayerChessInfo& piecesOpponent,
+        std::string fen,
         const std::vector<ChessInformationSet::BoardClause> conditions = {}
     );
     
@@ -284,6 +311,8 @@ private:
     FRIEND_TEST(chessinformationset_test, boardClause_test);
     FRIEND_TEST(chessinformationset_test, getIncompatibleGPU_test);
     FRIEND_TEST(chessinformationset_test, getDistributionGPU_test);
+    FRIEND_TEST(chessinformationset_test, getEntropyGPU_test);
+    FRIEND_TEST(chessinformationset_test, getMostProbable_test);
 };
 }
 

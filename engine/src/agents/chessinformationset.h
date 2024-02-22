@@ -140,6 +140,16 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             return y*8+x;
         };
         
+        static Square scanBoardIndexToSquare(std::uint8_t index)
+        {
+            std::uint8_t x = (index % 6)+1; //column {B-G}
+            std::uint8_t y = (index / 6)+1; //row {2-7}
+            ChessInformationSet::Square sq;
+            sq.column = static_cast<ChessInformationSet::ChessColumn>(x);
+            sq.row = static_cast<ChessInformationSet::ChessRow>(y);
+            return sq;
+        };
+        
         class BoardClause;
         class OnePlayerChessInfo
         {
@@ -431,10 +441,15 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             
                 double no_progress_count;
                 
+                std::array<double,64> squareEntropy;
+                
+                std::array<double,36> scanSquareEntropy;
+                
                 double getProbability(const Square& sq, const PieceType pT) const;
                 double getProbability(const std::uint8_t sqInd, const PieceType pT) const;
                 
                 std::string printBoard(const std::array<double,64>& piecesDistro) const;
+                std::string printBoard(const std::array<double,36>& piecesDistro) const;
                 std::string printComplete() const;
         };
         
@@ -442,10 +457,11 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         
         std::unique_ptr<Distribution> computeDistributionGPU();
         
-        std::unique_ptr<std::pair<std::array<double,64>,std::array<double,36>>> computeEntropyGPU
-        (
-            const Distribution&
-        );
+        void computeEntropy(Distribution&);
+        
+        void computeEntropyGPU(Distribution&);
+        
+        std::uint64_t computeMostProbableBoard(Distribution&); 
         
         /**
          * Marks boards incompatible with observations
@@ -484,19 +500,6 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         ) const;
         
         ChessInformationSet();
-    protected:
-        /**
-         * Sets the pieces in a given board
-         * @param pieces: array of 16 pieces in the following order 
-         *          {8*pawn left to right in initial placement,
-         *          rook,knight,bishop,queen,king,bishop,knight,rook}
-         *          The first item represents the square on the board
-         *          The second item represents wether the pieces is not captured
-         *          (captured:false, not captured:true)
-         * @param probability: probability of given board [0,1]
-         * @param index: index of the given board in the infoSet
-         */
-        void setBoard(OnePlayerChessInfo& pieces, double probability, std::uint64_t index);
         
         /**
          * Gets the pieces in a given board
@@ -510,6 +513,20 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
          *         probability of given board [0,1]
          */
         std::unique_ptr<std::pair<OnePlayerChessInfo,double>> getBoard(const std::uint64_t index) const;
+        
+    protected:
+        /**
+         * Sets the pieces in a given board
+         * @param pieces: array of 16 pieces in the following order 
+         *          {8*pawn left to right in initial placement,
+         *          rook,knight,bishop,queen,king,bishop,knight,rook}
+         *          The first item represents the square on the board
+         *          The second item represents wether the pieces is not captured
+         *          (captured:false, not captured:true)
+         * @param probability: probability of given board [0,1]
+         * @param index: index of the given board in the infoSet
+         */
+        void setBoard(OnePlayerChessInfo& pieces, double probability, std::uint64_t index);
 
         friend class CIS_Iterator;
         
@@ -569,7 +586,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         FRIEND_TEST(chessinformationset_test, addSetAndGetBoards_test);
         FRIEND_TEST(chessinformationset_test, boardClause_test);
         FRIEND_TEST(chessinformationset_test, getDistributionGPU_test);
-
+        FRIEND_TEST(chessinformationset_test, getEntropyGPU_test);
+        FRIEND_TEST(chessinformationset_test, getMostProbable_test);
 };
 void CHECK(cudaError_t cuError);
 }

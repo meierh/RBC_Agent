@@ -254,7 +254,7 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
     std::unique_ptr<ChessInformationSet>& cis,
     const PieceColor nextTurn,
     const unsigned int nextCompleteTurn,
-    std::vector<std::string>& allFEN
+    std::vector<char>& fenCharVector
 )
 {    
     std::uint64_t cis_size = cis->size();
@@ -306,7 +306,7 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
     CHECK(cudaMemcpy(deviceSelfInfoSetPtr,selfBoardData.data(),58*sizeof(uint8_t),cudaMemcpyHostToDevice));
     
     char* deviceFenVector;
-    std::vector<char> hostFenVector(cis_size*100);
+    fenCharVector.resize(cis_size*100);
     CHECK(cudaMalloc((void**)&deviceFenVector,cis_size*100*sizeof(char)));
             
     int suggested_blockSize; 
@@ -334,16 +334,31 @@ void RBCAgent::FullChessInfo::getAllFEN_GPU
     );
     cudaDeviceSynchronize();
         
-    CHECK(cudaMemcpy(hostFenVector.data(),deviceFenVector,cis_size*100*sizeof(char),cudaMemcpyDeviceToHost));
-    for(uint index=0; index<hostFenVector.size(); index+=100)
-    {
-        allFEN.push_back(std::string(hostFenVector.data()+index));
-    }
+    CHECK(cudaMemcpy(fenCharVector.data(),deviceFenVector,cis_size*100*sizeof(char),cudaMemcpyDeviceToHost));
+
     
     cudaFree(deviceOppoInfoSetPtr);
     cudaFree(deviceSelfPieceCharSet);
     cudaFree(deviceSelfInfoSetPtr);
     cudaFree(deviceOppoPieceCharSet);
     cudaFree(deviceFenVector);    
+}
+
+void RBCAgent::FullChessInfo::getAllFEN_GPU
+(
+    CIS::OnePlayerChessInfo& self,
+    const PieceColor selfColor,
+    std::unique_ptr<ChessInformationSet>& cis,
+    const PieceColor nextTurn,
+    const unsigned int nextCompleteTurn,
+    std::vector<std::string>& allFEN
+)
+{    
+    std::vector<char> fenCharVector;
+    getAllFEN_GPU(self,selfColor,cis,nextTurn,nextCompleteTurn,fenCharVector);    
+    for(uint index=0; index<fenCharVector.size(); index+=100)
+    {
+        allFEN.push_back(std::string(fenCharVector.data()+index));
+    }
 }
 }
