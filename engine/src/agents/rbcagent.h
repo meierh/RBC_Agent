@@ -42,6 +42,17 @@ class RBCAgent : public MCTSAgent
     using CIS = ChessInformationSet;
     
 public:
+    enum ScanStrategies 
+    {
+        maxScanEntropy,minScanEntropy,
+        maxScanEntropyHypothese,minScanEntropyHypothese,
+        trackTheKing,maxNonEmpty,
+        findDangerous,
+        limitedRandom
+    };
+    
+    ScanStrategies strategy;
+    
     enum PieceColor {white=0,black=1,empty=-1};
     static std::string combinedAgentsFEN
     (
@@ -151,7 +162,8 @@ public:
         SearchSettings* searchSettings,
         PlaySettings* playSettings,
         std::string fen,
-        PieceColor selfColor
+        PieceColor selfColor,
+        ScanStrategies strategy = maxScanEntropy
     );
     //~RBCAgent();
     RBCAgent(const RBCAgent&) = delete;

@@ -194,7 +194,12 @@ void sort_eval_lists(EvalInfo& evalInfo, vector<size_t>& indices)
 
 void update_eval_info(EvalInfo& evalInfo, const Node* rootNode, size_t tbHits, size_t selDepth, const SearchSettings* searchSettings)
 {
+    //std::cout<<"selDepth:"<<selDepth<<std::endl;
+    
     const size_t targetLength = rootNode->get_number_child_nodes();
+    
+    //std::cout<<"targetLength:"<<targetLength<<std::endl;
+    
     evalInfo.childNumberVisits = rootNode->get_child_number_visits();
     evalInfo.qValues = rootNode->get_q_values();
     if (targetLength == 1) {
@@ -213,7 +218,14 @@ void update_eval_info(EvalInfo& evalInfo, const Node* rootNode, size_t tbHits, s
         fill_missing_values<float>(evalInfo.qValues, startIdx, targetLength, LOSS_VALUE);
     }
     evalInfo.legalMoves = rootNode->get_legal_actions();
-
+    
+    /*
+    std::cout<<"evalInfo.legalMoves.size():"<<evalInfo.legalMoves.size()<<std::endl;
+    for(auto move : evalInfo.legalMoves)
+        std::cout<<" "<<move;
+    std::cout<<std::endl;
+    */
+    
     vector<size_t> indices;
     size_t maxIdx = min(searchSettings->multiPV, rootNode->get_no_visit_idx());
 

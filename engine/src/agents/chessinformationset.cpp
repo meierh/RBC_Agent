@@ -647,52 +647,124 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     return cis_distribution;    
 }
 
-void ChessInformationSet::computeEntropy
+void ChessInformationSet::Distribution::computeDistributionEntropy
 (
     Distribution& hypotheseDistro
 )
 {
-    /*
-    std::fill(hypotheseDistro.squareEntropy.begin(),hypotheseDistro.squareEntropy.end(),0);
-    std::fill(hypotheseDistro.scanSquareEntropy.begin(),hypotheseDistro.scanSquareEntropy.end(),0);
-    
-    for(auto iter=this->begin(); iter!=this->end(); iter++)
+    std::vector<std::array<double,64>*> piecesPtrVector = { &(hypotheseDistro.pawns),
+                                                            &(hypotheseDistro.knights),
+                                                            &(hypotheseDistro.bishops),
+                                                            &(hypotheseDistro.rooks),
+                                                            &(hypotheseDistro.queens),
+                                                            &(hypotheseDistro.kings) };
+                                                            
+    for(std::uint8_t squareInd=0; squareInd<64; squareInd++)
     {
-        OnePlayerChessInfo& hypoPiecesOpponent = (*iter)->first;
-        std::function<std::pair<bool,PieceType>(const Square&)> squareToPiece;
-        squareToPiece = hypoPiecesOpponent.getSquarePieceTypeCheck();
-
-        std::array<double,64> p_sq_Hypo;
-        for(std::uint8_t ind=0; ind<p_sq_Hypo.size(); ind++)
+        double emptyProbSquare = 1;
+        double entropySquare = 0;
+        for(std::uint8_t piecesInd=0; piecesInd<6; piecesInd++)
         {
-            std::pair<bool,PieceType> pieceInfo = squareToPiece(boardIndexToSquare(ind));
-            PieceType pT = PieceType::empty;
-            if(pieceInfo.first)
-                pT = pieceInfo.second;
-            p_sq_Hypo[ind] = p_sq_PT->getProbability(ind,pT);
+            double probability = (*(piecesPtrVector[piecesInd]))[squareInd];
+            emptyProbSquare -= probability;
+            if(probability!=0)
+                entropySquare += (- probability * (log2f(probability) / log2f(7)));
         }
-
-        for(std::uint8_t colI=1; colI<7; colI++)
+        if(emptyProbSquare<0 || emptyProbSquare>1)
         {
-            for(std::uint8_t rowI=1; rowI<7; rowI++)
+            if(emptyProbSquare<-0.01 || emptyProbSquare>1.01)
             {
-                Square sq(static_cast<ChessColumn>(colI),static_cast<ChessRow>(rowI));
-                std::pair<std::array<std::uint8_t,9>,std::array<Square,9>> sensingArea;
-                sensingArea = getSensingBoardIndexes(sq);
-                double sensingAreaProb=1;
-                for(uint i=0; i<sensingArea.first.size(); i++)
-                {
-                    sensingAreaProb *= p_sq_Hypo[sensingArea.first[i]];
-                }
-                
-                std::uint8_t boardInd = squareToBoardIndex(sq);
-                sensingEntropy[boardInd] += (sensingAreaProb*std::log2(sensingAreaProb));                
+                std::cout<<"emptyProbSquare:"<<emptyProbSquare<<std::endl;
+                std::cout<<"Complete:"<<hypotheseDistro.printComplete()<<std::endl;
+                throw std::logic_error("Out of bounds probability");
             }
+            else if(emptyProbSquare<-0.01)
+                emptyProbSquare = 0;
+            else
+                emptyProbSquare = 1;
         }
+        
+        if(emptyProbSquare!=0)
+            entropySquare += (- emptyProbSquare * (log2f(emptyProbSquare) / log2f(7)));
+        hypotheseDistro.squareEntropy[squareInd] = entropySquare;
     }
-    */
 }
 
+double ChessInformationSet::Distribution::computeScanAreaValue
+(
+    std::array<double,64> values,
+    ChessInformationSet::Square scanSquare,
+    std::function<double(std::array<double,9>)> valueMerger
+)
+{
+    auto check = [](bool validSquare){if(!validSquare) throw std::logic_error("Invalid scanSquare");};
+    std::array<double,9> scanAreaValues;
+    
+    Square scanAreaRunSq = scanSquare;
+    std::uint8_t scanAreaRunInd = squareToBoardIndex(scanAreaRunSq);
+    scanAreaValues[0] = values[scanAreaRunInd];
+    
+    check(scanAreaRunSq.horizPlus(1));
+    scanAreaRunInd = squareToBoardIndex(scanAreaRunSq);
+    scanAreaValues[1] = values[scanAreaRunInd];
+    
+    check(scanAreaRunSq.vertPlus(1));
+    scanAreaRunInd = squareToBoardIndex(scanAreaRunSq);
+    scanAreaValues[2] = values[scanAreaRunInd];
+    
+    check(scanAreaRunSq.horizMinus(1));
+    scanAreaRunInd = squareToBoardIndex(scanAreaRunSq);
+    scanAreaValues[3] = values[scanAreaRunInd];
+    
+    check(scanAreaRunSq.horizMinus(1));
+    scanAreaRunInd = squareToBoardIndex(scanAreaRunSq);
+    scanAreaValues[4] = values[scanAreaRunInd];
+    
+    check(scanAreaRunSq.vertMinus(1));
+    scanAreaRunInd = squareToBoardIndex(scanAreaRunSq);
+    scanAreaValues[5] = values[scanAreaRunInd];
+    
+    check(scanAreaRunSq.vertMinus(1));
+    scanAreaRunInd = squareToBoardIndex(scanAreaRunSq);
+    scanAreaValues[6] = values[scanAreaRunInd];
+    
+    check(scanAreaRunSq.horizPlus(1));
+    scanAreaRunInd = squareToBoardIndex(scanAreaRunSq);
+    scanAreaValues[7] = values[scanAreaRunInd];
+    
+    check(scanAreaRunSq.horizPlus(1));
+    scanAreaRunInd = squareToBoardIndex(scanAreaRunSq);
+    scanAreaValues[8] = values[scanAreaRunInd];
+    
+    /*
+    for(double val : scanAreaValues)
+        std::cout<<" "<<val;
+    std::cout<<std::endl;
+    */
+    return valueMerger(scanAreaValues);
+}
+
+void ChessInformationSet::Distribution::computeDistributionPseudoJointEntropy
+(
+    Distribution& hypotheseDistro
+)
+{   
+    using CIS = ChessInformationSet;
+    std::array<double,36>& scanSquareEntropy = hypotheseDistro.scanSquareEntropy;
+    std::fill(scanSquareEntropy.begin(),scanSquareEntropy.end(),0);
+    
+    for(std::uint8_t scanIndex=0; scanIndex<36; scanIndex++)
+    {
+        auto sumEntropy = [](const std::array<double,9>& values)
+        {
+            double mergedValue = std::accumulate(values.begin(),values.end(),0.0,std::plus<double>());
+            //std::cout<<"mergedValue:"<<mergedValue<<std::endl;
+            return mergedValue;
+        };
+        CIS::Square scanSquare = scanBoardIndexToSquare(scanIndex);        
+        scanSquareEntropy[scanIndex] = CIS::Distribution::computeScanAreaValue(hypotheseDistro.squareEntropy,scanSquare,sumEntropy);
+    }
+}
 
 void ChessInformationSet::add
 (

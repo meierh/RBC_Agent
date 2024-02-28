@@ -50,13 +50,27 @@ MCTSAgent::MCTSAgent(NeuralNetAPI *netSingle, vector<unique_ptr<NeuralNetAPI>>& 
     threadManager(nullptr),
     reachedTablebases(false)
 {
+    //std::cout<<"Create MCTS agent"<<std::endl;
     mapWithMutex.hashTable.reserve(1e6);
-
+    /*
+    std::cout<<"mapWithMutex reserved"<<std::endl;
+    std::cout<<"searchSettings:"<<searchSettings<<std::endl;
+    std::cout<<"searchSettings:"<<searchSettings->threads<<std::endl;
+    std::cout<<"netBatches.size():"<<netBatches.size()<<std::endl;
+    */
     for (auto i = 0; i < searchSettings->threads; ++i) {
+        /*
+        std::cout<<"netBatches[i].get():"<<netBatches[i].get()<<std::endl;
+        std::cout<<"searchSettings->batchSize:"<<searchSettings->batchSize<<std::endl;
+        std::cout<<"netBatches[i].get():"<<netBatches[i].get()<<std::endl;
+        */
         searchThreads.emplace_back(new SearchThread(netBatches[i].get(), searchSettings, &mapWithMutex));
     }
+    //std::cout<<"Created "<<searchThreads.size()<<"searchThreads"<<std::endl;
+    
     timeManager = make_unique<TimeManager>(searchSettings->randomMoveFactor);
     generator = default_random_engine(r());
+    //std::cout<<"MCTS agent created"<<std::endl;
 }
 
 MCTSAgent::~MCTSAgent()
@@ -288,6 +302,12 @@ void MCTSAgent::handle_single_move()
 void MCTSAgent::evaluate_board_state()
 {
     rootState = unique_ptr<StateObj>(state->clone());
+    
+    /*
+    std::cout<<"rootState:"<<rootState->fen()<<std::endl;
+    std::cout<<"rootState->legal_actions().size():"<<rootState->legal_actions().size()<<std::endl;
+    */
+    
     evalInfo->nodesPreSearch = init_root_node(state);
     thread tGCThread = thread(run_gc_thread, &gcThread);
 #ifdef USE_RL
@@ -323,13 +343,22 @@ void MCTSAgent::evaluate_board_state()
         run_mcts_search();
         update_stats();
     }
+    
+    //std::cout<<"Bracket done"<<std::endl;
+    
     update_eval_info(*evalInfo, rootNode.get(), tbHits, maxDepth, searchSettings);
+    //std::cout<<"update_eval_info done"<<std::endl;
+    //std::cout<<"evalInfo->bestMoveQ.size()"<<evalInfo->bestMoveQ.size()<<std::endl;
     lastValueEval = evalInfo->bestMoveQ[0];
+    //std::cout<<"lastValueEval done"<<std::endl;
     lastSideToMove = state->side_to_move();
+    //std::cout<<"lastSideToMove done"<<std::endl;
     update_nps_measurement(evalInfo->calculate_nps());
+    //std::cout<<"update_nps_measurement done"<<std::endl;
 #ifndef USE_RL
     tGCThread.join();
 #endif
+    //std::cout<<"Eval done"<<std::endl;
 }
 
 void MCTSAgent::run_mcts_search()

@@ -37,6 +37,7 @@
 #include "informationset.h"
 #include <functional>
 #include <stdint.h>
+ #include <numeric>
 
 #include "../environments/open_spiel/openspielstate.h"
 
@@ -86,21 +87,6 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 bool diagVertPlusHorizMinus(std::uint8_t multiple);
                 bool diagVertMinusHorizMinus(std::uint8_t multiple);
                 
-                // special knight moves
-                /*
-                bool knightVertPlusHorizPlus();
-                bool knightVertPlusHorizMinus();
-                
-                bool knightVertMinusHorizPlus();
-                bool knightVertMinusHorizMinus();
-                
-                bool knightHorizPlusVertPlus();
-                bool knightHorizPlusVertMinus();
-                
-                bool knightHorizMinusVertPlus();
-                bool knightHorizMinusVertMinus();
-                */
-                
                 bool validSquare(std::int8_t column, std::int8_t row);
 
                 std::string to_string() const
@@ -113,10 +99,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 std::pair<std::int8_t,std::int8_t> diffToSquare(const Square& sq);
                 bool moveSquare(std::int8_t deltaCol, std::int8_t deltaRow);                
         };
-        /*
-        enum class Piece {pawn1=0,pawn2=1,pawn3=2,pawn4=3,pawn5=4,pawn6=5,pawn7=6,pawn8=7,
-                          rook1=8,knight1=9,bishop1=10,queen=11,king=12,bishop2=13,knight2=14,rook2=15};
-                          */
+
         enum class PieceType : std::uint8_t {pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5,empty=6,unknown=7};
         static PieceType OpenSpielPieceType_to_CISPieceType(const open_spiel::chess::PieceType os_pT);
         static open_spiel::chess::PieceType CISPieceType_to_OpenSpielPieceType(const PieceType cis_pT);
@@ -124,6 +107,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         //Analouge to openspiel/games/chess/chess.h IndexToSquare
         static Square boardIndexToSquare(std::uint8_t index)
         {
+            if(index>=64)
+                throw std::logic_error("Invalid index for board! Must be in [0,63]");
             std::uint8_t x = index % 8; //column {A-H}
             std::uint8_t y = index / 8; //row {1-8}
             ChessInformationSet::Square sq;
@@ -142,6 +127,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         
         static Square scanBoardIndexToSquare(std::uint8_t index)
         {
+            if(index>=36)
+                throw std::logic_error("Invalid index for board! Must be in [0,63] but is "+std::to_string(index));
             std::uint8_t x = (index % 6)+1; //column {B-G}
             std::uint8_t y = (index / 6)+1; //row {2-7}
             ChessInformationSet::Square sq;
@@ -451,17 +438,23 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 std::string printBoard(const std::array<double,64>& piecesDistro) const;
                 std::string printBoard(const std::array<double,36>& piecesDistro) const;
                 std::string printComplete() const;
+                
+                static double computeScanAreaValue
+                (
+                    std::array<double,64> values,
+                    Square scanSquare,
+                    std::function<double(std::array<double,9>)> valueMerger
+                );
+                static void computeDistributionEntropy(Distribution&);
+                static void computeDistributionPseudoJointEntropy(Distribution&);
         };
         
         std::unique_ptr<Distribution> computeDistribution();
-        
         std::unique_ptr<Distribution> computeDistributionGPU();
         
-        void computeEntropy(Distribution&);
+        void computeHypotheseEntropyGPU(Distribution&);
         
-        void computeEntropyGPU(Distribution&);
-        
-        std::uint64_t computeMostProbableBoard(Distribution&); 
+        std::uint64_t computeMostProbableBoard(Distribution&);
         
         /**
          * Marks boards incompatible with observations
@@ -589,6 +582,6 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         FRIEND_TEST(chessinformationset_test, getEntropyGPU_test);
         FRIEND_TEST(chessinformationset_test, getMostProbable_test);
 };
-void CHECK(cudaError_t cuError);
+void CHECK(cudaError_t cuError,std::string from="");
 }
 #endif // INFORMATIONSET_H

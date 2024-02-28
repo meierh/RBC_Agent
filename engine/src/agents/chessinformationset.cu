@@ -5,12 +5,13 @@
 
 namespace crazyara {
 
-void CHECK(cudaError_t cuError)
+void CHECK(cudaError_t cuError, std::string from)
 {
     if(cuError!=cudaSuccess)
     {   
         std::string cudaErrorString(cudaGetErrorString(cuError));
         std::cout<<"CUDA Error: "<<cudaErrorString<<std::endl;
+        std::cout<<from<<std::endl;
         throw std::logic_error("CUDA Fail");
     }
 }
@@ -120,12 +121,19 @@ void ChessInformationSet::markIncompatibleBoardsGPU
         std::cout<<clause.to_string()<<"&&";
     std::cout<<std::endl;
     
+    std::cout<<"incompatibleBoards.empty():"<<incompatibleBoards.empty()<<std::endl;
+    
     std::unique_ptr<std::vector<std::uint8_t>> incompatibleBoard = checkBoardsValidGPU(conditions);
     for(std::uint64_t index=0; index<incompatibleBoard->size(); index++)
     {
+        //std::cout<<"index:"<<index<<" -- "<<int((*incompatibleBoard)[index])<<std::endl;
         if((*incompatibleBoard)[index]==0)
+        {
+            std::cout<<"Remove "<<index<<std::endl;
             incompatibleBoards.push(index);
+        }
     }
+    std::cout<<"incompatibleBoards.empty():"<<incompatibleBoards.empty()<<std::endl;
 }
 
 std::unique_ptr<std::vector<std::uint8_t>> ChessInformationSet::checkBoardsValidGPU
@@ -269,12 +277,6 @@ std::unique_ptr<std::vector<std::uint8_t>> ChessInformationSet::checkBoardsValid
     cudaFree(deviceBitwiseCondition);
     cudaFree(deviceInfoSetPtr);
     cudaFree(deviceIncompatibleBoards);
-
-    for(uint64_t boardIndex=0; boardIndex<hostIncompatibleBoards.size(); boardIndex++)
-    {
-        if(hostIncompatibleBoards[boardIndex]==1)
-            incompatibleBoards.push(boardIndex);
-    }
     
     //std::cout<<"End of function"<<std::endl;
 
@@ -398,6 +400,8 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
 {
     //std::cout<<"Compute Distribution"<<std::endl;
     std::uint64_t cis_size = size();
+    if(cis_size==0)
+        throw std::logic_error("Can not compute distribution from zero size hypothese set");
     std::uint64_t maxSize = 1;
     maxSize = maxSize<<32;
     if(cis_size >= maxSize)
@@ -408,21 +412,8 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     std::uint64_t cis_byte_size = cis_size*(chessInfoSize/8);
     std::uint8_t* hostInfoSetPtr = getInfoSetPtr();
     uint8_t* deviceInfoSetPtr;
-    CHECK(cudaMalloc((void**)&deviceInfoSetPtr,cis_byte_size*sizeof(uint8_t)));
-    CHECK(cudaMemcpy(deviceInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice));
-    
-    /*
-    for(int i=0; i<cis_size; i++)
-    {
-        for(int k=0; k<58; k++)
-            std::cout<<int(hostInfoSetPtr[i*58+k])<<" ";
-        std::cout<<std::endl;
-    }
-    std::cout<<std::endl;
-    */
-        
-    //std::cout<<"cis_size:"<<int(cis_size)<<std::endl;
-    //std::cout<<"cis_byte_size:"<<int(cis_byte_size)<<std::endl;
+    CHECK(cudaMalloc((void**)&deviceInfoSetPtr,cis_byte_size*sizeof(uint8_t)),"412");
+    CHECK(cudaMemcpy(deviceInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice),"cis 413");
     
     dim3 blocks(32);
     
@@ -433,15 +424,15 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     if(boardsPerThread < minBoardsPerThread)
         boardsPerThread = minBoardsPerThread;    
     dim3 grids(ceil((float)cis_size/(blocks.x*boardsPerThread)));
-
+    //std::cout<<"cis_size:"<<cis_size<<" > "<<maxSize<<std::endl;
     //std::cout<<"blocks.x:"<<blocks.x<<std::endl;
     //std::cout<<"grids.x:"<<grids.x<<std::endl;
     
     uint32_t* deviceBoardSumIn;
-    CHECK(cudaMalloc((void**)&deviceBoardSumIn,grids.x*6*64*sizeof(uint32_t)));
+    CHECK(cudaMalloc((void**)&deviceBoardSumIn,grids.x*6*64*sizeof(uint32_t)),"cis 429");
     
     uint32_t* deviceBoardSumOut;
-    CHECK(cudaMalloc((void**)&deviceBoardSumOut,grids.x*6*64*sizeof(uint32_t)));
+    CHECK(cudaMalloc((void**)&deviceBoardSumOut,grids.x*6*64*sizeof(uint32_t)),"cis 432");
     
     initialReduceDistr<<<grids,blocks>>>
     (
@@ -474,7 +465,7 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     }
     //std::cout<<"Copy result back"<<std::endl;
     std::array<std::uint32_t,384> piecesSum;
-    CHECK(cudaMemcpy(piecesSum.data(),deviceBoardSumIn,384*sizeof(uint32_t),cudaMemcpyDeviceToHost));
+    CHECK(cudaMemcpy(piecesSum.data(),deviceBoardSumIn,384*sizeof(uint32_t),cudaMemcpyDeviceToHost),"cis 465");
     
     /*
     for(auto count : piecesSum)
@@ -717,7 +708,7 @@ __global__ void reduceEntropy // blockDim.x == 32
     }
 }
 
-void ChessInformationSet::computeEntropyGPU
+void ChessInformationSet::computeHypotheseEntropyGPU
 (
     Distribution& hypotheseDistro
 )

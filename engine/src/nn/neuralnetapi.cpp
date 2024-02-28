@@ -91,10 +91,15 @@ void NeuralNetAPI::initialize_nn_design()
 
 void NeuralNetAPI::initialize()
 {
+    //std::cout<<"Start NeuralNetAPI::initialize"<<std::endl;
     load_model();
+    //std::cout<<"Model loaded"<<std::endl;
     initialize_nn_design();
+    //std::cout<<"NN initialized"<<std::endl;
     load_parameters();
+    //std::cout<<"Parameters loaded"<<std::endl;
     bind_executor();
+    //std::cout<<"Bind executed"<<std::endl;
 }
 
 NeuralNetAPI::NeuralNetAPI(const string& ctx, int deviceID, unsigned int batchSize, const string& modelDirectory, bool enableTensorrt):

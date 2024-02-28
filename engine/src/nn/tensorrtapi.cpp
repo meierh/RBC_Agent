@@ -51,11 +51,11 @@ TensorrtAPI::TensorrtAPI(int deviceID, unsigned int batchSize, const string &mod
 {
     // select the requested device
     cudaSetDevice(deviceID);
-    std::cout<<"deviceID:"<<deviceID<<std::endl;
+    //std::cout<<"deviceID:"<<deviceID<<std::endl;
     // in ONNX, the model architecture and parameters are in the same file
     modelName = get_onnx_model_name(modelDir, batchSize);
-    std::cout<<"modelName:"<<modelName<<std::endl;
-    std::cout<<"modelDir:"<<modelDir<<std::endl;
+    //std::cout<<"modelName:"<<modelName<<std::endl;
+    //std::cout<<"modelDir:"<<modelDir<<std::endl;
     
     modelFilePath = modelDir + modelName;
     //std::cout<<"modelFilePath:"<<modelFilePath<<std::endl;
@@ -64,12 +64,12 @@ TensorrtAPI::TensorrtAPI(int deviceID, unsigned int batchSize, const string &mod
     trtFilePath = generate_trt_file_path(modelDir, batchSize, precision, deviceID);
     //std::cout<<"batchSize:"<<batchSize<<std::endl;
     //std::cout<<"precision:"<<precision<<std::endl;
-    std::cout<<"trtFilePath:"<<trtFilePath<<std::endl;
+    //std::cout<<"trtFilePath:"<<trtFilePath<<std::endl;
     
     gLogger.setReportableSeverity(nvinfer1::ILogger::Severity::kERROR);
-    std::cout<<"Initialize:"<<std::endl;
+    //std::cout<<"Initialize:"<<std::endl;
     initialize();
-    std::cout<<"TensorAPI End"<<trtFilePath<<std::endl;
+    //std::cout<<"TensorAPI End"<<trtFilePath<<std::endl;
 }
 
 TensorrtAPI::~TensorrtAPI()
@@ -90,10 +90,10 @@ TensorrtAPI::~TensorrtAPI()
 void TensorrtAPI::load_model()
 {
     // load an engine from file or build an engine from the ONNX network
-    std::cout<<"Try TensorAPI model loaded"<<std::endl;
-    std::cout<<"Get cuda engine:"<<get_cuda_engine()<<std::endl;
+    //std::cout<<"Try TensorAPI model loaded"<<std::endl;
+    //std::cout<<"Get cuda engine:"<<get_cuda_engine()<<std::endl;
     engine = shared_ptr<nvinfer1::ICudaEngine>(get_cuda_engine(), samplesCommon::InferDeleter());
-    std::cout<<"TensorAPI model loaded"<<std::endl;
+    //std::cout<<"TensorAPI model loaded"<<std::endl;
 }
 
 void TensorrtAPI::load_parameters()
@@ -276,7 +276,7 @@ nvinfer1::ICudaEngine* TensorrtAPI::get_cuda_engine() {
     const char* buffer = read_buffer(trtFilePath, bufferSize);
     //buffer=nullptr;
     if (buffer) {
-        std::cout<<"Create engine from buffer"<<std::endl;
+        //std::cout<<"Create engine from buffer"<<std::endl;
         info_string("deserialize engine:", trtFilePath);
         
         /*
@@ -296,15 +296,15 @@ nvinfer1::ICudaEngine* TensorrtAPI::get_cuda_engine() {
         std::cout<<"ILogger is null:"<<(log==nullptr)<<std::endl;
         */
         
-        std::cout<<"Got runtime"<<std::endl;
+        //std::cout<<"Got runtime"<<std::endl;
 #ifdef TENSORRT7
         engine = runtime->deserializeCudaEngine(buffer, bufferSize, nullptr);
 #else
         engine = runtime->deserializeCudaEngine(buffer, bufferSize);
 #endif
         
-        std::cout<<"Engine is null:"<<(engine==nullptr)<<std::endl;
-        std::cout<<"Engine is null:"<<(!engine)<<std::endl;
+        //std::cout<<"Engine is null:"<<(engine==nullptr)<<std::endl;
+        //std::cout<<"Engine is null:"<<(!engine)<<std::endl;
         /*
         //nvinfer1::Dims tensor_shape
         int32_t DLACore = runtime->getDLACore();
@@ -321,7 +321,7 @@ nvinfer1::ICudaEngine* TensorrtAPI::get_cuda_engine() {
 
     
     if (!engine) {
-        std::cout<<"Fallback engine create"<<std::endl;
+        //std::cout<<"Fallback engine create"<<std::endl;
         // fallback: Create engine from scratch
         std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
         engine = create_cuda_engine_from_onnx();
@@ -330,7 +330,7 @@ nvinfer1::ICudaEngine* TensorrtAPI::get_cuda_engine() {
         generatedTrtFromONNX = true;
 
         if (engine) {
-            std::cout<<"Create engine from fallback"<<std::endl;
+            //std::cout<<"Create engine from fallback"<<std::endl;
             info_string("serialize engine:", trtFilePath);
             // serialized engines are not portable across platforms or TensorRT versions
             // engines are specific to the exact GPU model they were built on

@@ -36,11 +36,13 @@ RBCAgent::RBCAgent
     SearchSettings* searchSettings,
     PlaySettings* playSettings,
     std::string fen,
-    RBCAgent::PieceColor selfColor
+    RBCAgent::PieceColor selfColor,
+    ScanStrategies strategy
 ):
 MCTSAgent(netSingle, netBatches, searchSettings, playSettings),
 selfColor(selfColor),
-currentTurn(1)
+currentTurn(1),
+strategy(strategy)
 {
     //std::cout<<"Create RBCAgent"<<std::endl;
     if(selfColor==PieceColor::empty)
@@ -1360,23 +1362,207 @@ ChessInformationSet::Square RBCAgent::selectScanAction
     StateObj *pos
 )
 {
-    using CIS=ChessInformationSet;
+    using CIS = ChessInformationSet;
+    using CISDIS = ChessInformationSet::Distribution;
+    std::unique_ptr<CIS::Distribution> hypothesisDistroPtr = cis->computeDistributionGPU();
+    CIS::Distribution& hypothesisDistro = *hypothesisDistroPtr;
     
-    std::unique_ptr<CIS::Distribution> hypothesisDistro = cis->computeDistributionGPU();
-    cis->computeEntropyGPU(*hypothesisDistro);
-    
-    std::uint8_t maxEntropyIndex;
-    double maxEntropy = 0;
-    const std::array<double,36>& scanSquareEntropy = hypothesisDistro->scanSquareEntropy;
-    for(std::uint8_t scanIndex=0; scanIndex<scanSquareEntropy.size(); scanIndex++)
+    switch(strategy)
     {
-        if(maxEntropy <= scanSquareEntropy[scanIndex])
-        {
-            maxEntropy = scanSquareEntropy[scanIndex];
-            maxEntropyIndex = scanIndex;
+        case maxScanEntropy:
+        case minScanEntropy:
+        {    
+            CIS::Distribution::computeDistributionEntropy(hypothesisDistro);
+            //std::cout<<"SquareEntropy"<<std::endl<<hypothesisDistro.printBoard(hypothesisDistro.squareEntropy)<<std::endl;
+            CIS::Distribution::computeDistributionPseudoJointEntropy(hypothesisDistro);
+            //std::cout<<"ScanAreaEntropy"<<std::endl<<hypothesisDistro.printBoard(hypothesisDistro.scanSquareEntropy)<<std::endl;
+            std::uint8_t maxEntropyIndex = 0;
+            double maxEntropy = 0;
+            const std::array<double,36>& scanSquareEntropy = hypothesisDistro.scanSquareEntropy;
+            for(std::uint8_t scanIndex=0; scanIndex<scanSquareEntropy.size(); scanIndex++)
+            {
+                if(maxEntropy <= scanSquareEntropy[scanIndex])
+                {
+                    maxEntropy = scanSquareEntropy[scanIndex];
+                    maxEntropyIndex = scanIndex;
+                }
+            }
+            //std::cout<<"maxEntropy index:"<<int(maxEntropyIndex)<<std::endl;
+            return CIS::scanBoardIndexToSquare(maxEntropyIndex);
+            break;
         }
-    }    
-    return CIS::scanBoardIndexToSquare(maxEntropyIndex);
+        case maxScanEntropyHypothese:
+        case minScanEntropyHypothese:
+        {    
+            cis->computeHypotheseEntropyGPU(hypothesisDistro);
+            std::uint8_t maxEntropyIndex;
+            double maxEntropy = 0;
+            const std::array<double,36>& scanSquareEntropy = hypothesisDistro.scanSquareEntropy;
+            for(std::uint8_t scanIndex=0; scanIndex<scanSquareEntropy.size(); scanIndex++)
+            {
+                if(maxEntropy <= scanSquareEntropy[scanIndex])
+                {
+                    maxEntropy = scanSquareEntropy[scanIndex];
+                    maxEntropyIndex = scanIndex;
+                }
+            }    
+            return CIS::scanBoardIndexToSquare(maxEntropyIndex);
+            break;
+        }
+        case trackTheKing:
+        {
+            auto sumProbKing = [](std::array<double,9> probKing)
+            {
+                return std::accumulate(probKing.begin(),probKing.end(),0);
+            };
+            
+            std::uint8_t maxProbKingInd;
+            double maxProbKing = 0;
+            std::array<double,64>& probKing = hypothesisDistro.kings;
+            for(std::uint8_t scanIndex=0; scanIndex<36; scanIndex++)
+            {
+                CIS::Square scanSquare = CIS::scanBoardIndexToSquare(scanIndex);
+                double scanAreaProbKing = CISDIS::computeScanAreaValue(probKing,scanSquare,sumProbKing);
+                if(maxProbKing <= scanAreaProbKing)
+                {
+                    maxProbKing = scanAreaProbKing;
+                    maxProbKingInd = scanIndex;
+                }
+            }    
+            return CIS::scanBoardIndexToSquare(maxProbKingInd);
+            break;
+        }
+        case maxNonEmpty:
+        {
+            std::vector<std::array<double,64>*> piecesPtrVector = { &(hypothesisDistro.pawns),
+                                                                    &(hypothesisDistro.knights),
+                                                                    &(hypothesisDistro.bishops),
+                                                                    &(hypothesisDistro.rooks),
+                                                                    &(hypothesisDistro.queens),
+                                                                    &(hypothesisDistro.kings) };
+            std::array<double,64> nonEmpty;
+            std::fill(nonEmpty.begin(),nonEmpty.end(),0);
+            for(std::uint8_t piecesInd=0; piecesInd<6; piecesInd++)
+            {
+                for(std::uint8_t squareInd=0; squareInd<64; squareInd++)
+                {
+                    nonEmpty[squareInd] += (*(piecesPtrVector[piecesInd]))[squareInd];
+                }
+            }
+            
+            auto sumProbNonEmpty = [](std::array<double,9> nonEmpty)
+            {
+                return std::accumulate(nonEmpty.begin(),nonEmpty.end(),0.0,std::plus<double>());
+            };
+            
+            std::uint8_t maxProbNonEmptyInd;
+            double maxProbNonEmpty = 0;
+            for(std::uint8_t scanIndex=0; scanIndex<36; scanIndex++)
+            {
+                CIS::Square scanSquare = CIS::scanBoardIndexToSquare(scanIndex);
+                double scanAreaProbNonEmpty = CISDIS::computeScanAreaValue(nonEmpty,scanSquare,sumProbNonEmpty);
+                if(maxProbNonEmpty <= scanAreaProbNonEmpty)
+                {
+                    maxProbNonEmpty = scanAreaProbNonEmpty;
+                    maxProbNonEmptyInd = scanIndex;
+                }
+            }    
+            return CIS::scanBoardIndexToSquare(maxProbNonEmptyInd);
+        }
+        case findDangerous:
+        {
+            std::vector<std::array<double,64>*> piecesPtrVector = { &(hypothesisDistro.knights),                                                                    
+                                                                    &(hypothesisDistro.bishops),                                                                    
+                                                                    &(hypothesisDistro.rooks),                                                                    
+                                                                    &(hypothesisDistro.queens),                                                                    
+                                                                    &(hypothesisDistro.kings) };
+            std::array<double,64> dangerous;
+            std::fill(dangerous.begin(),dangerous.end(),0);
+            for(std::uint8_t piecesInd=0; piecesInd<5; piecesInd++)
+            {
+                for(std::uint8_t squareInd=0; squareInd<64; squareInd++)
+                {
+                    dangerous[squareInd] += (*(piecesPtrVector[piecesInd]))[squareInd];
+                }
+            }
+            
+            auto sumProbDangerous = [](std::array<double,9> dangerous)
+            {
+                return std::accumulate(dangerous.begin(),dangerous.end(),0.0,std::plus<double>());
+            };
+            
+            std::uint8_t maxProbDangerousInd;
+            double maxProbDangerous = 0;
+            for(std::uint8_t scanIndex=0; scanIndex<36; scanIndex++)
+            {
+                CIS::Square scanSquare = CIS::scanBoardIndexToSquare(scanIndex);
+                double scanAreaProbDangerous = CISDIS::computeScanAreaValue(dangerous,scanSquare,sumProbDangerous);
+                if(maxProbDangerous <= scanAreaProbDangerous)
+                {
+                    maxProbDangerous = scanAreaProbDangerous;
+                    maxProbDangerousInd = scanIndex;
+                }
+            }    
+            return CIS::scanBoardIndexToSquare(maxProbDangerousInd);
+        }
+        case limitedRandom:
+        {
+            //std::cout<<"Limited Random"<<std::endl;
+            std::vector<std::array<double,64>*> piecesPtrVector = { &(hypothesisDistro.pawns),
+                                                                    &(hypothesisDistro.knights),
+                                                                    &(hypothesisDistro.bishops),
+                                                                    &(hypothesisDistro.rooks),
+                                                                    &(hypothesisDistro.queens),
+                                                                    &(hypothesisDistro.kings) };
+            //std::cout<<"Merged"<<std::endl;
+            std::array<double,64> nonEmpty;
+            std::fill(nonEmpty.begin(),nonEmpty.end(),0);
+            //std::cout<<"Initialized"<<std::endl;
+            for(std::uint8_t piecesInd=0; piecesInd<6; piecesInd++)
+            {
+                for(std::uint8_t squareInd=0; squareInd<64; squareInd++)
+                {
+                    nonEmpty[squareInd] += (*(piecesPtrVector[piecesInd]))[squareInd];
+                }
+            }
+            /*
+            std::cout<<"Non Empty computed";
+            for(double ind : nonEmpty)
+                std::cout<<" "<<int(ind);
+            std::cout<<std::endl;
+            */
+            auto sumNonEmpty = [](std::array<double,9> nonEmpty)
+            {
+                std::uint8_t count = 0;
+                for(double nonEmptyProb : nonEmpty)
+                {
+                    if(nonEmptyProb>0)
+                        count++;
+                }
+                return count;
+            };
+            
+            std::vector<std::uint8_t> scanIndices;
+            for(std::uint8_t scanIndex=0; scanIndex<36; scanIndex++)
+            {
+                CIS::Square scanSquare = CIS::scanBoardIndexToSquare(scanIndex);
+                std::uint8_t scanAreaNonEmptyCount = CISDIS::computeScanAreaValue(nonEmpty,scanSquare,sumNonEmpty);
+                for(std::uint8_t count=0; count<scanAreaNonEmptyCount; count++)
+                    scanIndices.push_back(scanAreaNonEmptyCount);
+            }
+            /*
+            std::cout<<"Scan indices";
+            for(std::uint8_t ind : scanIndices)
+                std::cout<<" "<<int(ind);
+            std::cout<<std::endl;
+            */
+            int randomIndex = rand() % scanIndices.size();
+            return CIS::scanBoardIndexToSquare(scanIndices[randomIndex]);
+            break;
+        }
+        default:
+            throw std::logic_error("Unspecified scan strategy");
+    }
 }
 
 std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
@@ -1385,16 +1571,18 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
     
     using CIS = ChessInformationSet;
     
+    cis->clearRemoved();
+    
     std::unique_ptr<CIS::Distribution> hypothesisDistro = cis->computeDistributionGPU();
+    std::cout<<"Computed Distribution"<<std::endl;
     std::uint64_t mostProbableBoardIndex = cis->computeMostProbableBoard(*hypothesisDistro);
     
     //std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
     //std::cout<<"cis->size():"<<cis->size()<<std::endl;
-    
-    cis->clearRemoved(false);
-    
+        
     if(mostProbableBoardIndex<0 || mostProbableBoardIndex>=cis->size())
     {
+        std::cout<<"mostProbableBoardIndex:"<<mostProbableBoardIndex<<std::endl;
         throw std::logic_error("Most probable board out of bounds");
     }
     std::unique_ptr<std::pair<CIS::OnePlayerChessInfo,double>> selectedHypothese;

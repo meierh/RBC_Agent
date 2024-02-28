@@ -35,31 +35,51 @@ NeuralNetAPIUser::NeuralNetAPIUser(NeuralNetAPI *net):
     net(net),
     auxiliaryOutputs(nullptr)
 {
+    /*
+    std::cout<<"Assigned net:"<<net<<std::endl;
+    
+    std::cout<<"TENSORRT:"<<TENSORRT<<std::endl;
+    std::cout<<"DYNAMIC_NN_ARCH:"<<DYNAMIC_NN_ARCH<<std::endl;
+    
+    std::cout<<"net->get_batch_size():"<<net->get_batch_size()<<std::endl;
+    std::cout<<"net->get_nb_input_values_total():"<<net->get_nb_input_values_total()<<std::endl;
+    std::cout<<"net->get_nb_policy_values():"<<net->get_nb_policy_values()<<std::endl;
+    std::cout<<"inputPlanes:"<<inputPlanes<<std::endl;
+    std::cout<<"valueOutputs:"<<valueOutputs<<std::endl;
+    std::cout<<"probOutputs:"<<probOutputs<<std::endl;
+    std::cout<<"auxiliaryOutputs:"<<auxiliaryOutputs<<std::endl;
+    */
+
     // allocate memory for all predictions and results
 #ifdef TENSORRT
-#ifdef DYNAMIC_NN_ARCH
-    CHECK(cudaMallocHost((void**) &inputPlanes, net->get_batch_size() * net->get_nb_input_values_total() * sizeof(float)));
-#else
-     CHECK(cudaMallocHost((void**) &inputPlanes, net->get_batch_size() * StateConstants::NB_VALUES_TOTAL() * sizeof(float)));
-#endif
+    #ifdef DYNAMIC_NN_ARCH
+        CHECK(cudaMallocHost((void**) &inputPlanes, net->get_batch_size() * net->get_nb_input_values_total() * sizeof(float)));
+    #else
+        CHECK(cudaMallocHost((void**) &inputPlanes, net->get_batch_size() * StateConstants::NB_VALUES_TOTAL() * sizeof(float)));
+    #endif
+    //std::cout<<"cudaMalloced inputPlanes:"<<inputPlanes<<std::endl;
     CHECK(cudaMallocHost((void**) &valueOutputs, net->get_batch_size() * sizeof(float)));
     CHECK(cudaMallocHost((void**) &probOutputs, net->get_batch_size() * net->get_nb_policy_values() * sizeof(float)));
+    //std::cout<<"cudaMalloced valueOutputs:"<<valueOutputs<<std::endl;
+    //std::cout<<"cudaMalloced probOutputs:"<<probOutputs<<std::endl;
+    
     if (net->has_auxiliary_outputs()) {
         CHECK(cudaMallocHost((void**) &auxiliaryOutputs, net->get_batch_size() * net->get_nb_auxiliary_outputs() * sizeof(float)));
     }
+    //std::cout<<"cudaMalloced auxiliaryOutputs:"<<auxiliaryOutputs<<std::endl;
 #else
     inputPlanes = new float[net->get_batch_size() * net->get_nb_input_values_total()];
     valueOutputs = new float[net->get_batch_size()];
     probOutputs = new float[net->get_batch_size() * net->get_nb_policy_values()];
-#ifdef DYNAMIC_NN_ARCH
-    if (net->has_auxiliary_outputs()) {
-        auxiliaryOutputs = new float[net->get_batch_size() * net->get_nb_auxiliary_outputs()];
-    }
-#else
-    if (StateConstants::NB_AUXILIARY_OUTPUTS()) {
-         auxiliaryOutputs = new float[net->get_batch_size() * StateConstants::NB_AUXILIARY_OUTPUTS()];
-    }
-#endif
+    #ifdef DYNAMIC_NN_ARCH
+        if (net->has_auxiliary_outputs()) {
+            auxiliaryOutputs = new float[net->get_batch_size() * net->get_nb_auxiliary_outputs()];
+        }
+    #else
+        if (StateConstants::NB_AUXILIARY_OUTPUTS()) {
+            auxiliaryOutputs = new float[net->get_batch_size() * StateConstants::NB_AUXILIARY_OUTPUTS()];
+        }
+    #endif
 #endif
 }
 
@@ -69,24 +89,24 @@ NeuralNetAPIUser::~NeuralNetAPIUser()
     CHECK(cudaFreeHost(inputPlanes));
     CHECK(cudaFreeHost(valueOutputs));
     CHECK(cudaFreeHost(probOutputs));
-#ifdef DYNAMIC_NN_ARCH
-    if (net->has_auxiliary_outputs()) {
-#else
-    if (StateConstants::NB_AUXILIARY_OUTPUTS()) {
-#endif
+    #ifdef DYNAMIC_NN_ARCH
+        if (net->has_auxiliary_outputs()) {
+    #else
+        if (StateConstants::NB_AUXILIARY_OUTPUTS()) {
+    #endif
         CHECK(cudaFreeHost(auxiliaryOutputs));
-    }
+        }
 #else
-    delete [] inputPlanes;
-    delete [] valueOutputs;
-    delete [] probOutputs;
-#ifdef DYNAMIC_NN_ARCH
-    if (net->has_auxiliary_outputs()) {
-#else
-    if (StateConstants::NB_AUXILIARY_OUTPUTS()) {
-#endif
+        delete [] inputPlanes;
+        delete [] valueOutputs;
+        delete [] probOutputs;
+    #ifdef DYNAMIC_NN_ARCH
+        if (net->has_auxiliary_outputs()) {
+    #else
+        if (StateConstants::NB_AUXILIARY_OUTPUTS()) {
+    #endif
         delete [] auxiliaryOutputs;
-    }
+        }
 #endif
 }
 

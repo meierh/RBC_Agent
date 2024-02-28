@@ -725,9 +725,9 @@ TEST(chessinformationset_test, getEntropyGPU_test)
     cis1.add(fci1.black,1);
 
     std::unique_ptr<CIS::Distribution> incompBoards = cis1.computeDistributionGPU();
-    cis1.computeEntropyGPU(*incompBoards);
-    std::cout<<incompBoards->printComplete()<<std::endl;
-    cis1.computeEntropyGPU(*incompBoards);
+    cis1.computeHypotheseEntropyGPU(*incompBoards);
+    //std::cout<<incompBoards->printComplete()<<std::endl;
+    cis1.computeHypotheseEntropyGPU(*incompBoards);
 }
 
 TEST(chessinformationset_test, getMostProbable_test)

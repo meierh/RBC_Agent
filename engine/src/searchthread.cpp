@@ -51,6 +51,7 @@ SearchThread::SearchThread(NeuralNetAPI *netBatch, const SearchSettings* searchS
     terminalNodeCache(searchSettings->batchSize*2),
     reachedTablebases(false)
 {
+    //std::cout<<"Create Search Thread"<<std::endl;
     switch (searchSettings->searchPlayerMode) {
     case MODE_SINGLE_PLAYER:
         terminalNodeCache = 1;  // TODO: Check if this is really needed

@@ -95,9 +95,18 @@ void Agent::perform_action()
 {
     isRunning = true;
     evalInfo->start = chrono::steady_clock::now();
+
+    //std::cout<<"Start Evaluation"<<std::endl;
+    
     this->evaluate_board_state();
+    
+    //std::cout<<"Evaluated"<<std::endl;
+    
     evalInfo->end = chrono::steady_clock::now();
     set_best_move(state->steps_from_null());
+    
+    //std::cout<<"Best move set"<<std::endl;
+    
     info_msg(*evalInfo);
     info_string(state->fen());
     #ifdef MODE_STRATEGO
