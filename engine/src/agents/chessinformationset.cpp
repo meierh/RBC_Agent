@@ -3,9 +3,35 @@
 namespace crazyara {
 
 ChessInformationSet::ChessInformationSet
-()
-:InformationSet()
+(
+    std::uint64_t initialCapacity
+)
+:InformationSet(initialCapacity)
 {}
+
+std::string ChessInformationSet::pieceTypeToString
+(
+    PieceType pt
+)
+{
+    switch(pt)
+    {
+        case PieceType::pawn:
+            return "Pawn";
+        case PieceType::knight:
+            return "Knight";
+        case PieceType::bishop:
+            return "Bishop";
+        case PieceType::rook:
+            return "Rook";
+        case PieceType::queen:
+            return "Queen";
+        case PieceType::empty:
+            return "Empty";
+        case PieceType::unknown:
+            return "Unknown";
+    }
+}
 
 ChessInformationSet::PieceType ChessInformationSet::OpenSpielPieceType_to_CISPieceType
 (
@@ -411,6 +437,50 @@ double ChessInformationSet::Distribution::getProbability
     }        
 }
 
+bool ChessInformationSet::Distribution::operator==
+(
+    const ChessInformationSet::Distribution& rhs
+) const
+{
+    using CIS = ChessInformationSet;
+    std::vector<const std::array<double,64>*> thisPieces = 
+        {&(pawns),
+         &(knights),
+         &(bishops),
+         &(rooks),
+         &(queens),
+         &(kings)};
+    
+    std::vector<const std::array<double,64>*> rhsPieces = 
+        {&(rhs.pawns),
+         &(rhs.knights),
+         &(rhs.bishops),
+         &(rhs.rooks),
+         &(rhs.queens),
+         &(rhs.kings)};
+    
+    for(std::uint8_t pieceType=0; pieceType<6; pieceType++)
+    {
+        const std::array<double,64>& thisPiece = (*(thisPieces[pieceType]));
+        const std::array<double,64>& rhsPiece = (*(rhsPieces[pieceType]));
+        for(std::uint8_t boardInd=0; boardInd<64; boardInd++)
+        {
+            double error = std::abs(thisPiece[boardInd]-rhsPiece[boardInd]);
+            if(error>=10e-6)
+            {
+                std::cout<<"error: ("<<int(pieceType)<<","<<int(boardInd)<<"): "<<error<<std::endl;
+                
+                std::cout<<"this"<<std::endl;
+                std::cout<<printComplete()<<std::endl;
+                std::cout<<"rhs"<<std::endl;
+                std::cout<<rhs.printComplete()<<std::endl;
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
 std::string ChessInformationSet::Distribution::printBoard
 (
     const std::array<double,64>& piecesDistro
@@ -627,7 +697,7 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
         cis_distribution->no_progress_count += pieceData.no_progress_count;
     }
     
-    auto divideBoard = [](std::array<double,64> board, std::uint64_t value)
+    auto divideBoard = [](std::array<double,64>& board, std::uint64_t value)
     {
         for(double& count : board)
             count /= value;

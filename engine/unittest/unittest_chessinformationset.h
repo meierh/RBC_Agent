@@ -5,6 +5,63 @@
 auto os_SquareToIndex = open_spiel::chess::SquareToIndex;
 using os_Square = open_spiel::chess::Square;
 
+std::vector<std::string> randomFens = 
+{
+    "1B5r/8/2P1R1N1/1pK1Rp2/kp1pP3/8/p7/3q3n w - - 0 1",
+    "5q2/p3P1p1/rk4p1/3p2K1/7p/1r3P2/BP1P4/1N6 w - - 0 1",
+    "QK6/8/p6P/2pPk1p1/1P4b1/1n2r3/1q4p1/6bR w - - 0 1",
+    "7K/6p1/k5b1/B1b2p1P/R1P5/P1P1n3/1P3p2/2q5 w - - 0 1",
+    "8/1Pr5/b4p2/1Q1pn3/2p2kPK/2N2P2/p2q1p2/8 w - - 0 1",
+    "4R3/R4B2/4Pp2/1PpPB3/1PK5/q1p3N1/3k3P/8 w - - 0 1",
+    "1r6/1pp2pQ1/P2nBb1K/2p1P3/p3k3/8/N7/2R5 w - - 0 1",
+    "5n1b/P4r1p/1p2BP1Q/8/k3p1nR/2PP2P1/1pN1K2B/6R1 w - - 0 1",
+    "1R3n2/1P2Np2/2p1r2P/2B2pp1/6PR/1Kp4P/p4Nkr/4n3 w - - 0 1",
+    "N7/P1pQ1p1b/5P1b/r4n1k/1PnB2pp/4P2B/P1K2P2/8 w - - 0 1",
+    "3Q4/P2p2p1/1NpP1Bk1/2N1R1Pb/1p2n1P1/6b1/2pP3r/5K2 w - - 0 1",
+    "5BB1/Q1P1ppKP/7N/5p2/nPPR1q2/1P2p1k1/p1P5/b7 w - - 0 1",
+    "6r1/1PPp3P/p2P1pRq/4k3/2B1n3/1pP1PK2/N2P1p2/7Q w - - 0 1",
+    "1n2k3/1R4nN/3bP2p/2P2BBP/2bK1PP1/3P1pR1/N7/Q7 w - - 0 1",
+    "1n2k3/1R4nN/3bP2p/2P2BBP/2bK1PP1/3P1pR1/N7/Q7 w - - 0 1",
+    "1R1rb3/2P3pP/B1k4p/2q2Pp1/PbQ4B/1r5p/K3p3/4N3 w - - 0 1",
+    "4r3/3P1P1p/bp2p1k1/3pn1P1/3rP3/4P1RP/B1PN1N2/2K5 w - - 0 1",
+    "2Nk4/pb1P4/rr4pP/P1Kpn3/7p/P7/B1np2R1/B2q4 w - - 0 1",
+    "1Q2R2N/6P1/1p1p2B1/1P3np1/p1rkn3/b5P1/qPP5/6Kb w - - 0 1",
+    "8/pp2p3/1kP2P1r/2n1K2p/8/n1pPP3/R6p/1rb2BRb w - - 0 1",
+    "1R6/bK5N/3p2kp/pQ3b2/p1B1PB2/3PP1qP/1p1P1PRp/1n2Nrn1 w - - 0 1",
+    "N3nr2/P1P5/2r1Bp2/Pbpn3P/1R2QPpR/pPk1p3/P5pq/1KB5 w - - 0 1",
+    "1q6/p1pp2r1/b1RrP1P1/NN2pp2/1b1n2BP/1PP1Kp1p/1P1P2k1/6n1 w - - 0 1",
+    "1n2N3/2bPPp2/4BBPp/1q1pR2b/3KP1P1/6Qp/PrPpk1p1/r5R1 w - - 0 1",
+    "3rR1Q1/RPk5/rpB2qpp/2PP4/P2b2p1/1bP1pPPp/1N5P/1KB5 w - - 0 1",
+    "b3B3/NP1p2pR/pKp5/p2P1PpP/qp1P1N1p/2n2r2/5PPB/3kn3 w - - 0 1",
+    "2B4r/1Ppp2Q1/nppP4/4p1p1/1k1pPB1P/1r2N1qn/b1RP1bN1/2K5 w - - 0 1",
+    "q3NkN1/P1p2Prb/p1P1KBrP/P2n2p1/2PRp1R1/Ppb2p2/4pPp1/2nB2Q1 w - - 0 1",
+    "r1N1q3/1b1pP1KP/3B1Qpn/p1bp2PP/1P1P1RP1/2p1pnR1/1ppk1PBN/4r3 w - - 0 1",
+    "1n5q/p1Pb1pPP/2QP1P1P/1P2p2k/prppN1Nn/5r1p/pBR1B1PK/2R1b3 w - - 0 1",
+    "4r3/1pPK4/N1PP1bpp/RN2pkpB/1PPBp2n/q1Qp2Pb/P1nP2p1/6rR w - - 0 1",
+    "3RQ1n1/P1p4p/2p2BNP/1Pp2B1b/1PPP1rP1/1pP1p2N/1ppRnbK1/k1q2r2 w - - 0 1",
+    "3r4/2n1k2r/bP3Np1/p1pPB1pP/2p1Pp1P/n1KBPRRp/2N1pbPP/1Q5q w - - 0 1",
+    "1r6/p1nB3P/RpP1n3/p1B1PKbp/pPP1p1PP/pN1kN3/R1q1rPp1/Q2b4 w - - 0 1",
+    "2rb2k1/PPPpP2p/1pp2qn1/5Q1r/P1K1pp2/P1P2npB/PNb1R1pB/3R2N1 w - - 0 1",
+    "3K4/1PRpBbP1/N3p1p1/p3bB1n/pp1P2P1/pP2qk1n/NPPP1rpQ/4r2R w - - 0 1",
+    "N1kBrb1N/3RPp1b/3Pppp1/pq1pn1P1/1P1p3P/p3R1K1/QP2P2P/3B2nr w - - 0 1",
+    "N1kBrb1N/3RPp1b/3Pppp1/pq1pn1P1/1P1p3P/p3R1K1/QP2P2P/3B2nr w - - 0 1",
+    "4N2r/2b1q1pP/pPbprQ1R/1pBB1n1K/1pPPpp1P/1R1P2N1/P1k1p1P1/3n4 w - - 0 1",
+    "B7/PpK1b3/PR2Pqpp/4r1RP/p2BQ1p1/n1pPp1p1/b2PrPNP/Nn1k4 w - - 0 1",
+    "n2b1B2/p3P1Np/kp3PQq/PNR3Pb/2P1pnP1/1pKR4/1Ppp1pBP/6rr w - - 0 1",
+    "2k5/5b2/P7/8/pP5P/6Q1/8/3nK3 w - - 0 1",
+    "8/1K1P4/2Br1k2/8/5p2/2p5/1NP5/8 w - - 0 1",
+    "6K1/8/6P1/P3p2p/5R2/1P1k1P2/8/8 w - - 0 1",
+    "1R2N3/3P1P2/5K2/2p5/8/6k1/r7/3R4 w - - 0 1",
+    "2r5/1p5k/3p4/pK6/5P2/4Q3/4n3/8 w - - 0 1",
+    "8/p6k/4p3/P3N3/2P5/4K3/2R3b1/8 w - - 0 1",
+    "6N1/1pp3R1/1p6/7k/Q1b5/8/8/6K1 w - - 0 1",
+    "8/3P4/8/3P3K/2q1n3/5rr1/5kP1/8 w - - 0 1",
+    "8/2pPk3/n7/8/2r3Q1/K7/2p4P/8 w - - 0 1",
+    "8/8/2PRP3/5b2/3K1n2/4P3/1p6/7k w - - 0 1",
+    "8/2R5/4k3/K7/8/6P1/8/8 w - - 0 1",
+    "8/2R5/4k3/K7/8/6P1/8/8 w - - 0 1"
+};
+
 namespace crazyara {
 TEST(chessinformationsetsquare_test, constructorAndEqual_test)
 {
@@ -679,7 +736,33 @@ TEST(chessinformationset_test, getIncompatibleGPU_test)
     EXPECT_EQ(*incompBoards9,compatible9);
 }
 
-TEST(chessinformationset_test, getDistributionGPU_test)
+TEST(chessinformationset_test, getDistribution_test1)
+{
+    using BC = ChessInformationSet::BoardClause;
+    using SQ = ChessInformationSet::Square;
+    using COL = ChessInformationSet::ChessColumn;
+    using ROW = ChessInformationSet::ChessRow;
+    using PT = ChessInformationSet::BoardClause::PieceType;
+    using CIS = ChessInformationSet;   
+    CIS cis;
+    
+    std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
+    RBCAgent::FullChessInfo fci1(fen1);
+
+    for(uint i=0; i<1000; i++)
+    {
+        if(i%2==0)
+            cis.add(fci1.white,1);
+        else
+            cis.add(fci1.black,1);
+    }
+    
+    std::unique_ptr<CIS::Distribution> distributionGPU = cis.computeDistributionGPU();
+    std::unique_ptr<CIS::Distribution> distributionCPU = cis.computeDistribution();
+    EXPECT_EQ(*distributionCPU,*distributionGPU);    
+}
+
+TEST(chessinformationset_test, getDistribution_test2)
 {
     using BC = ChessInformationSet::BoardClause;
     using SQ = ChessInformationSet::Square;
@@ -687,18 +770,22 @@ TEST(chessinformationset_test, getDistributionGPU_test)
     using ROW = ChessInformationSet::ChessRow;
     using PT = ChessInformationSet::BoardClause::PieceType;
     using CIS = ChessInformationSet;
-    CIS cis1;
     
-    std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
-    RBCAgent::FullChessInfo fci1(fen1);
+    std::vector<CIS::OnePlayerChessInfo> board;
+    uint numberBoards = 1000000;
+    CIS cis(numberBoards*2);
+    for(uint i=0; i<numberBoards; i++)
+    {
+        std::string& fen = randomFens[i%randomFens.size()];
+        RBCAgent::FullChessInfo fci(fen);
+        cis.add(fci.white,1);
+        cis.add(fci.black,1);
+    }    
 
-    for(uint i=0; i<1000; i++)
-        if(i%2==0)
-            cis1.add(fci1.white,1);
-        else
-            cis1.add(fci1.black,1);
     
-    std::unique_ptr<CIS::Distribution> incompBoards = cis1.computeDistributionGPU();
+    std::unique_ptr<CIS::Distribution> distributionGPU = cis.computeDistributionGPU();
+    std::unique_ptr<CIS::Distribution> distributionCPU = cis.computeDistribution();
+    EXPECT_EQ(*distributionCPU,*distributionGPU);    
 }
 
 TEST(chessinformationset_test, getEntropyGPU_test)
@@ -738,7 +825,7 @@ TEST(chessinformationset_test, getMostProbable_test)
     using ROW = ChessInformationSet::ChessRow;
     using PT = ChessInformationSet::BoardClause::PieceType;
     using CIS = ChessInformationSet;
-    CIS cis1;
+    CIS cis1(50000);
     
     std::string fen1 = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
     RBCAgent::FullChessInfo fci1(fen1);
@@ -757,4 +844,33 @@ TEST(chessinformationset_test, getMostProbable_test)
     std::uint64_t mostProb = cis1.computeMostProbableBoard(*incompBoards);
     EXPECT_EQ(mostProb,0);
 }
+
+/*
+TEST(chessinformationset_test, getMostProbable_test)
+{
+    using BC = ChessInformationSet::BoardClause;
+    using SQ = ChessInformationSet::Square;
+    using COL = ChessInformationSet::ChessColumn;
+    using ROW = ChessInformationSet::ChessRow;
+    using PT = ChessInformationSet::BoardClause::PieceType;
+    using CIS = ChessInformationSet;
+    
+    std::vector<CIS::OnePlayerChessInfo> board;
+    uint numberBoards = 1000000;
+    CIS cis(numberBoards*2);
+    std::vector<std::string> inputFens;
+    for(uint i=0; i<numberBoards; i++)
+    {
+        std::string& fen = randomFens[i%randomFens.size()];
+        RBCAgent::FullChessInfo fci(fen);
+        cis.add(fci.white,1);
+        cis.add(fci.black,1);
+    }    
+
+    
+    std::unique_ptr<CIS::Distribution> distributionGPU = cis.computeDistributionGPU();
+    std::unique_ptr<CIS::Distribution> distributionCPU = cis.computeDistribution();
+    EXPECT_EQ(*distributionCPU,*distributionGPU);    
+}
+*/
 };

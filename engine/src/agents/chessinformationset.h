@@ -101,6 +101,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         };
 
         enum class PieceType : std::uint8_t {pawn=0,knight=1,bishop=2,rook=3,queen=4,king=5,empty=6,unknown=7};
+        static std::string pieceTypeToString(PieceType pt);
         static PieceType OpenSpielPieceType_to_CISPieceType(const open_spiel::chess::PieceType os_pT);
         static open_spiel::chess::PieceType CISPieceType_to_OpenSpielPieceType(const PieceType cis_pT);
 
@@ -447,6 +448,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 );
                 static void computeDistributionEntropy(Distribution&);
                 static void computeDistributionPseudoJointEntropy(Distribution&);
+                
+                bool operator==(const Distribution& rhs) const;
         };
         
         std::unique_ptr<Distribution> computeDistribution();
@@ -492,7 +495,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
             double probability
         ) const;
         
-        ChessInformationSet();
+        ChessInformationSet(std::uint64_t initialCapacity=1);
         
         /**
          * Gets the pieces in a given board
@@ -578,7 +581,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         FRIEND_TEST(chessinformationset_test, encodeDecode_test);
         FRIEND_TEST(chessinformationset_test, addSetAndGetBoards_test);
         FRIEND_TEST(chessinformationset_test, boardClause_test);
-        FRIEND_TEST(chessinformationset_test, getDistributionGPU_test);
+        FRIEND_TEST(chessinformationset_test, getDistribution_test1);
+        FRIEND_TEST(chessinformationset_test, getDistribution_test2);
         FRIEND_TEST(chessinformationset_test, getEntropyGPU_test);
         FRIEND_TEST(chessinformationset_test, getMostProbable_test);
 };

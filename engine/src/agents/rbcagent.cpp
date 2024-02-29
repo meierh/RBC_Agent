@@ -75,7 +75,8 @@ std::string RBCAgent::combinedAgentsFEN
     const RBCAgent& white,
     const RBCAgent& black,
     const PieceColor nextTurn,
-    const unsigned int nextCompleteTurn
+    const unsigned int nextCompleteTurn,
+    PieceColor forceColor
 )
 {
     return RBCAgent::FullChessInfo::getFEN(white.playerPiecesTracker,black.playerPiecesTracker,nextTurn,nextCompleteTurn);
@@ -349,7 +350,8 @@ std::string RBCAgent::FullChessInfo::getFEN
     const CIS::OnePlayerChessInfo& white,
     const CIS::OnePlayerChessInfo& black,
     const PieceColor nextTurn,
-    const unsigned int nextCompleteTurn
+    const unsigned int nextCompleteTurn,
+    PieceColor forceColor
 )
 {
     std::array<const CIS::OnePlayerChessInfo*,2> colors = {&white,&black};
@@ -375,6 +377,9 @@ std::string RBCAgent::FullChessInfo::getFEN
             {&(oneColorInfo.kings),  'K'}
             };
             
+        std::array<std::array<bool,8>,8> ownBoardSet;
+        std::for_each(ownBoardSet.begin(),ownBoardSet.end(),[](auto& row){row.fill(false);});
+
         for(const std::tuple<const std::vector<CIS::Square>*,char>& onePieceType : piecesList)
         {
             const std::vector<CIS::Square>* squareList = std::get<0>(onePieceType);
@@ -387,15 +392,34 @@ std::string RBCAgent::FullChessInfo::getFEN
                 char& squareSymbol = chessBoard[row][column];
                 if(squareSymbol != ' ')
                 {
-                    std::cout<<"charOffset:"<<charOffset<<std::endl;
-                    std::cout<<"squareSymbol:"<<uint(squareSymbol)<<" | "<<squareSymbol<<std::endl;
-                    std::cout<<"symbolToPrint:"<<char(symbolToPrint+charOffset)<<std::endl;
-                    std::cout<<"square:"<<sq.to_string()<<std::endl;
-                    std::cout<<"white:"<<white.to_string()<<std::endl;
-                    std::cout<<"black:"<<black.to_string()<<std::endl;
-                    throw std::logic_error("Pieces overlay at fen creation!");
+                    if(ownBoardSet[row][column])
+                    {
+                        std::cout<<"charOffset:"<<charOffset<<std::endl;
+                        std::cout<<"squareSymbol:"<<uint(squareSymbol)<<" | "<<squareSymbol<<std::endl;
+                        std::cout<<"symbolToPrint:"<<char(symbolToPrint+charOffset)<<std::endl;
+                        std::cout<<"square:"<<sq.to_string()<<std::endl;
+                        std::cout<<"white:"<<white.to_string()<<std::endl;
+                        std::cout<<"black:"<<black.to_string()<<std::endl;
+                        throw std::logic_error("Pieces of single side overlay at fen creation!");
+                    }
+                    if(forceColor==PieceColor::empty)
+                    {
+                        std::cout<<"charOffset:"<<charOffset<<std::endl;
+                        std::cout<<"squareSymbol:"<<uint(squareSymbol)<<" | "<<squareSymbol<<std::endl;
+                        std::cout<<"symbolToPrint:"<<char(symbolToPrint+charOffset)<<std::endl;
+                        std::cout<<"square:"<<sq.to_string()<<std::endl;
+                        std::cout<<"white:"<<white.to_string()<<std::endl;
+                        std::cout<<"black:"<<black.to_string()<<std::endl;
+                        throw std::logic_error("Pieces of separate side overlay at fen creation!");
+                    }
+                    else
+                    {
+                        if(forceColor==PieceColor::white)
+                            continue;
+                    }
                 }
                 squareSymbol = symbolToPrint + charOffset;
+                ownBoardSet[row][column] = true;
             }
         }
         
@@ -1574,7 +1598,6 @@ std::unique_ptr<RBCAgent::FullChessInfo> RBCAgent::selectHypothese()
     cis->clearRemoved();
     
     std::unique_ptr<CIS::Distribution> hypothesisDistro = cis->computeDistributionGPU();
-    std::cout<<"Computed Distribution"<<std::endl;
     std::uint64_t mostProbableBoardIndex = cis->computeMostProbableBoard(*hypothesisDistro);
     
     //std::cout<<"cis->validSize():"<<cis->validSize()<<std::endl;
@@ -2189,6 +2212,7 @@ void RBCAgent::handleSelfMoveInfo
             default:
                 throw std::logic_error("Moved piece is empty!");
         }
+        
         if(promotion)
         {
             toSquareReal = toSquareAim;
@@ -2219,10 +2243,24 @@ void RBCAgent::handleSelfMoveInfo
                 }
             }
             if(!pieceMoved)
+            {
+                
                 toSquareReal = fromSquare;
+            }
         }
-        //std::cout<<"toSquareReal:"<<toSquareReal.to_string()<<std::endl;
         
+        //Correction for missing illegal move marker from observation
+        if(fromSquare==toSquareReal)
+        {
+            if(initialMovePiece==CIS::PieceType::pawn)
+                observation->lastMoveIllegal = true;
+        }
+        if(fromSquare!=toSquareReal && toSquareAim!=toSquareReal)
+        // failed double move
+        {
+            if(initialMovePiece==CIS::PieceType::pawn && fromSquare.column==toSquareAim.column)                
+                observation->lastMoveIllegal = true;
+        }
 
         std::vector<CIS::BoardClause> conditions;
         std::vector<CIS::BoardClause> captureDemands;
@@ -2233,6 +2271,8 @@ void RBCAgent::handleSelfMoveInfo
             if(observation->lastMoveCapturedPiece)
             // piece movement stopped prematurely, special moves like en_passant, castling and promotion are not possible here
             {
+                std::cout<<"Move of "<<CIS::pieceTypeToString(initialMovePiece)<<" from "<<fromSquare.to_string()<<" to "<<toSquareAim.to_string()<<" was stopped capturing at:"<<toSquareReal.to_string()<<std::endl;
+
                 if(fromSquare==toSquareReal)
                     throw std::logic_error("Capture while no piece movement!");
                 if(castling)
@@ -2247,6 +2287,8 @@ void RBCAgent::handleSelfMoveInfo
                 if(castling)
                 // enemy piece prevents castling
                 {
+                    std::cout<<"Last castling move was illegal"<<std::endl;
+
                     CIS::ChessRow castlingRow = (selfColor==PieceColor::black)?CIS::ChessRow::eight:CIS::ChessRow::one;
                     std::vector<CIS::ChessColumn> castlingCol;
                     if(playerPiecesTracker.kingside && !selfObs.kingside)
@@ -2273,15 +2315,39 @@ void RBCAgent::handleSelfMoveInfo
                     // Failed forward move
                     {
                         CIS::Square squareBeforePawn = fromSquare;
+                        CIS::Square squareDoubleBeforePawn = fromSquare;
+                        double roomForDoubleMove;
                         if(selfColor==PieceColor::white)
+                        {
                             squareBeforePawn.vertPlus(1);
+                            roomForDoubleMove = squareDoubleBeforePawn.vertPlus(2);
+                        }
                         else
+                        {
                             squareBeforePawn.vertMinus(1);
-                        conditions.push_back(CIS::BoardClause(squareBeforePawn,CIS::BoardClause::PieceType::any));
+                            roomForDoubleMove = squareDoubleBeforePawn.vertMinus(2);
+                        }
+                        
+                        if(roomForDoubleMove && toSquareAim==squareDoubleBeforePawn)
+                        {
+                            std::cout<<"Pawn double forward move was illegal"<<std::endl;
+                            CIS::BoardClause cond1(squareBeforePawn,CIS::BoardClause::PieceType::none);
+                            conditions.push_back(cond1);
+                            CIS::BoardClause cond2(squareDoubleBeforePawn,CIS::BoardClause::PieceType::any);
+                            conditions.push_back(cond2);
+                        }
+                        else
+                        {
+                            std::cout<<"Pawn forward move was illegal"<<std::endl;
+                            CIS::BoardClause cond(squareBeforePawn,CIS::BoardClause::PieceType::any);
+                            conditions.push_back(cond);
+                        }
                     }
                     else
                     // Failed en_passant move
                     {
+                        std::cout<<"Pawn's En_passant move was illegal"<<std::endl;
+                        
                         CIS::Square squareNextToPawn = {toSquareAim.column,fromSquare.row};
                         CIS::BoardClause noPawnHere(squareNextToPawn,CIS::BoardClause::PieceType::pawn);
                         noPawnHere = !noPawnHere;
@@ -2304,6 +2370,7 @@ void RBCAgent::handleSelfMoveInfo
             }
             if(observation->lastMoveCapturedPiece)
             {
+                std::cout<<CIS::pieceTypeToString(initialMovePiece)<<" moved from "<<fromSquare.to_string()<<" to "<<toSquareAim.to_string()<<" captured piece at:"<<toSquareReal.to_string()<<std::endl;
                 if(fromSquare==toSquareReal)
                     throw std::logic_error("Capture while no piece movement!");
                 if(castling)
@@ -2325,6 +2392,8 @@ void RBCAgent::handleSelfMoveInfo
             }
             else
             {
+                std::cout<<CIS::pieceTypeToString(initialMovePiece)<<" moved from "<<fromSquare.to_string()<<" to "<<toSquareAim.to_string()<<std::endl;
+                
                 if(initialMovePiece==CIS::PieceType::knight)
                 {
                     conditions.push_back(CIS::BoardClause(toSquareReal,CIS::BoardClause::PieceType::none));

@@ -59,7 +59,8 @@ public:
         const RBCAgent& white,
         const RBCAgent& black,
         const PieceColor nextTurn,
-        const unsigned int nextCompleteTurn
+        const unsigned int nextCompleteTurn,
+        PieceColor forceColor = PieceColor::empty
     );
     
 private:   
@@ -93,7 +94,8 @@ private:
                 const CIS::OnePlayerChessInfo& white,
                 const CIS::OnePlayerChessInfo& black,
                 const PieceColor nextTurn,
-                const unsigned int nextCompleteTurn
+                const unsigned int nextCompleteTurn,
+                PieceColor forceColor = PieceColor::empty
             );
             
             static void getAllFEN_GPU
@@ -322,7 +324,8 @@ private:
     FRIEND_TEST(rbcagentfullchessinfo_test, Observation_test);
     FRIEND_TEST(chessinformationset_test, boardClause_test);
     FRIEND_TEST(chessinformationset_test, getIncompatibleGPU_test);
-    FRIEND_TEST(chessinformationset_test, getDistributionGPU_test);
+    FRIEND_TEST(chessinformationset_test, getDistribution_test1);
+    FRIEND_TEST(chessinformationset_test, getDistribution_test2);
     FRIEND_TEST(chessinformationset_test, getEntropyGPU_test);
     FRIEND_TEST(chessinformationset_test, getMostProbable_test);
 };

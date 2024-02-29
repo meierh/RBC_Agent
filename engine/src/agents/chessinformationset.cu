@@ -121,7 +121,7 @@ void ChessInformationSet::markIncompatibleBoardsGPU
         std::cout<<clause.to_string()<<"&&";
     std::cout<<std::endl;
     
-    std::cout<<"incompatibleBoards.empty():"<<incompatibleBoards.empty()<<std::endl;
+    //std::cout<<"incompatibleBoards.empty():"<<incompatibleBoards.empty()<<std::endl;
     
     std::unique_ptr<std::vector<std::uint8_t>> incompatibleBoard = checkBoardsValidGPU(conditions);
     for(std::uint64_t index=0; index<incompatibleBoard->size(); index++)
@@ -133,7 +133,7 @@ void ChessInformationSet::markIncompatibleBoardsGPU
             incompatibleBoards.push(index);
         }
     }
-    std::cout<<"incompatibleBoards.empty():"<<incompatibleBoards.empty()<<std::endl;
+    //std::cout<<"incompatibleBoards.empty():"<<incompatibleBoards.empty()<<std::endl;
 }
 
 std::unique_ptr<std::vector<std::uint8_t>> ChessInformationSet::checkBoardsValidGPU
@@ -399,6 +399,10 @@ __global__ void reduceDistr // blockDim.x == 32
 std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeDistributionGPU()
 {
     //std::cout<<"Compute Distribution"<<std::endl;
+    clearRemoved();
+    if(size()<1 || size()!=validSize())
+        throw std::logic_error("Computing hypothese from invalid cis set");  
+    
     std::uint64_t cis_size = size();
     if(cis_size==0)
         throw std::logic_error("Can not compute distribution from zero size hypothese set");
@@ -464,7 +468,7 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
         deviceBoardSumOut = temp;
     }
     //std::cout<<"Copy result back"<<std::endl;
-    std::array<std::uint32_t,384> piecesSum;
+    std::array<uint32_t,384> piecesSum;
     CHECK(cudaMemcpy(piecesSum.data(),deviceBoardSumIn,384*sizeof(uint32_t),cudaMemcpyDeviceToHost),"cis 465");
     
     /*
@@ -481,7 +485,14 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     //std::cout<<"Compute Fraction"<<std::endl;
     std::array<double,384> piecesSumDouble;
     for(uint i=0; i<piecesSum.size(); i++)
+    {
+        if(piecesSum[i]<0 || piecesSum[i]>cis_size)
+        {
+            std::cout<<"piecesSum["<<i<<"]:"<<piecesSum[i]<<"/"<<cis_size<<std::endl;
+            throw std::logic_error("Invalid piecesSum");
+        }
         piecesSumDouble[i] = static_cast<double>(piecesSum[i]) / cis_size;
+    }
     
     //std::cout<<"Compute Distribution"<<std::endl;
     auto piecesDistro = std::make_unique<Distribution>();
