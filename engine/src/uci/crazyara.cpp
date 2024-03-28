@@ -84,7 +84,7 @@ void CrazyAra::uci_loop(int argc, char *argv[])
 {
     unique_ptr<StateObj> state = make_unique<StateObj>();
     
-    rbcTest();
+    rbcTest(argc,argv);
     
     /*
     #include <typeinfo>
@@ -95,7 +95,7 @@ void CrazyAra::uci_loop(int argc, char *argv[])
     cout<<"actions.size():"<<act.size()<<endl;
     cout<<"variant:"<<variant<<endl;
     */
-    
+    /*
     string token, cmd;
     EvalInfo evalInfo;
     variant = StateConstants::variant_to_int(Options["UCI_Variant"]);
@@ -161,6 +161,7 @@ void CrazyAra::uci_loop(int argc, char *argv[])
     } while (token != "quit" && argc == 1); // Command line args are one-shot
 
     wait_to_finish_last_search();
+    */
 }
 
 void CrazyAra::prepare_search_config_structs()
@@ -615,8 +616,29 @@ void CrazyAra::ucinewgame()
     }
 }
 
-void CrazyAra::rbcTest()
+void CrazyAra::rbcTest(int argc, char* argv[])
 {
+    /*
+    unique_ptr<StateObj> testState = make_unique<OpenSpielState>(3);
+    std::string fen = "r1bqkb1r/ppp1pp1p/5np1/3p4/1n4PP/P1PP3R/1P2PP2/RNBQKBN1 b Qkq - 2 6";
+    testState->set(fen,false,3);
+    testState->do_action(14);
+    std::string observationString = testState->get_state_string(open_spiel::chess::Color::kBlack,open_spiel::chess::Color::kWhite);
+    std::cout<<"              fen:"<<fen<<std::endl;
+    std::cout<<"observationString:"<<observationString<<std::endl;
+    throw std::logic_error("Temp Stop");
+    */
+    /*
+    unique_ptr<StateObj> testState = make_unique<OpenSpielState>(3);
+    std::string fen = "rnbqkbnr/p1ppppp1/7p/1p6/QPP5/2N1P3/P2P1PPP/R1B1KBNR b KQkq b3 0 6";
+    testState->set(fen,false,3);
+    testState->do_action(14);
+    std::string observationString = testState->get_state_string(open_spiel::chess::Color::kBlack,open_spiel::chess::Color::kWhite);
+    std::cout<<"              fen:"<<fen<<std::endl;
+    std::cout<<"observationString:"<<observationString<<std::endl;
+    throw std::logic_error("Temp Stop");
+    */
+    
     std::cout<<"-----------------------RBC Testing---------------------"<<std::endl;
     unique_ptr<StateObj> state = make_unique<OpenSpielState>(3);
     std::string initialFen = state->fen();
@@ -631,8 +653,8 @@ void CrazyAra::rbcTest()
     std::cout<<")"<<std::endl;
 
     searchSettings.multiPV = 1;
-    auto whitePlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatchesContender, &searchSettings, &playSettings, initialFen, RBCAgent::PieceColor::white);
-    auto blackPlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatchesContender, &searchSettings, &playSettings, initialFen, RBCAgent::PieceColor::black);
+    auto whitePlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatchesContender, &searchSettings, &playSettings, initialFen, RBCAgent::PieceColor::white,RBCAgent::maxScanEntropy);
+    auto blackPlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatchesContender, &searchSettings, &playSettings, initialFen, RBCAgent::PieceColor::black,RBCAgent::limitedRandom);
     std::cout<<"Created Players!"<<std::endl;
         
     GamePGN gamePGN;
@@ -643,6 +665,15 @@ void CrazyAra::rbcTest()
 
     EvalInfo evalInfo;
     Result gameResult;
+    
+    std::string fileName = "dummy.data";
+    if(argc>1)
+        fileName = std::string(argv[1]);
+    
+    std::cout<<"Print game data to:"<<fileName<<std::endl<<std::endl;
+    
+    std::ofstream gameDataFile(fileName);
+    gameDataFile << "RBC Game of type: "<<fileName<<std::endl;
 
     RBCAgent* activePlayer = whitePlayer.get();
     RBCAgent* passivePlayer = blackPlayer.get();
@@ -685,6 +716,9 @@ void CrazyAra::rbcTest()
             }
         }
         gamePGN.gameMoves.emplace_back(sanMove);
+        
+        activePlayer->recordInformationSetSize(gameDataFile);
+        
         temp = activePlayer;
         activePlayer = passivePlayer;
         passivePlayer = temp;
@@ -694,12 +728,19 @@ void CrazyAra::rbcTest()
         
         std::cout<<"|||||||||||||||||||||||||||||| half Turn of:"<<activePlayer->getColor()<<" done||||||||||||||||||||||||||||||||"<<std::endl;
         std::cout<<"    State fen:"<<state->ToString()<<std::endl;
-        std::cout<<"RBCAgents fen:"<<RBCAgent::combinedAgentsFEN(*whitePlayer,*blackPlayer,activePlayer->getColor(),nextFullMove)<<std::endl<<std::endl;
+        std::cout<<"RBCAgents fen:"<<RBCAgent::combinedAgentsFEN(*whitePlayer,*blackPlayer,activePlayer->getColor(),nextFullMove,passivePlayer->getColor())<<std::endl<<std::endl;
         
-
-        //throw std::runtime_error("Temp Stop");
+        gameDataFile << state->ToString() <<std::endl;
     }
     while(gameResult == NO_RESULT);
+    
+    std::vector<std::string> possibleResults = {"DRAWN","WHITE_WIN","BLACK_WIN","NO_RESULT"};
+    std::string result = possibleResults[static_cast<uint>(gameResult)];
+    
+    gameDataFile << std::endl << result << std::endl;
+    
+    std::cout<<result<<std::endl;
+    
     //set_game_result_to_pgn(gameResult);
     //write_game_to_pgn(filenamePGNArena, verbose);
     //clean_up(gamePGN, whitePlayer);

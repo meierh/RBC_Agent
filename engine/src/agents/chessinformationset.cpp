@@ -26,9 +26,11 @@ std::string ChessInformationSet::pieceTypeToString
             return "Rook";
         case PieceType::queen:
             return "Queen";
+        case PieceType::king:
+            return "King";
         case PieceType::empty:
             return "Empty";
-        case PieceType::unknown:
+        default:
             return "Unknown";
     }
 }
@@ -251,6 +253,16 @@ bool ChessInformationSet::OnePlayerChessInfo::removePieceAt
     auto iter = pieceIter(sq);
     if(iter==pieceTypeList->end())
         throw std::logic_error("Error");
+    
+    if(piece.second==PieceType::rook)
+    {
+        if(kingside)
+            if(sq.column == ChessColumn::H)
+                kingside = false;
+        if(queenside)
+            if(sq.column == ChessColumn::A)
+                queenside = false;
+    }
     
     pieceTypeList->erase(iter);    
     return true;
@@ -486,7 +498,7 @@ std::string ChessInformationSet::Distribution::printBoard
     const std::array<double,64>& piecesDistro
 ) const
 {
-    std::string resultBoard = "_________________________________________\n";
+    std::string resultBoard = "_________________________________________________________\n";
     for(std::int8_t row=7; row>=0; row--)
     {
         resultBoard += "|";
@@ -496,14 +508,14 @@ std::string ChessInformationSet::Distribution::printBoard
             std::uint8_t boardIndex = squareToBoardIndex(Square(col,row));
             double prob = piecesDistro[boardIndex];
             std::stringstream stream;
-            stream << std::fixed << std::setprecision(2) << prob;
+            stream << std::fixed << std::setprecision(4) << prob;
             std::string s = stream.str();
             resultBoard += s;
             resultBoard += "|";
         }
         resultBoard += "\n";
     }
-    resultBoard += "-----------------------------------------\n";
+    resultBoard += "---------------------------------------------------------\n";
     return resultBoard;
 }
 
@@ -619,12 +631,60 @@ std::unique_ptr<std::bitset<chessInfoSize>> ChessInformationSet::encodeBoard
     probabilityIntBitMax.flip();
     double probabilityMax = static_cast<double>(probabilityIntBitMax.to_ulong());
     if(probability<0 || probability>1)
+    {
+        std::cout<<"probability:"<<probability<<std::endl;
         throw std::logic_error("probability must be inside [0,1]");
+    }
     probability = probability*probabilityMax;
     std::uint8_t probabilityInt = static_cast<std::uint8_t>(probability);
     assignBitPattern<std::uint8_t>(bitBoard,bitStartInd,probabilityInt,7);
 
     return bits;
+}
+
+std::uint64_t ChessInformationSet::computeMostProbableBoard
+(
+    Distribution& hypotheseDistro
+)
+{
+    using CIS = ChessInformationSet;
+    
+    std::uint64_t maxBoardInd = 0;
+    double maxBoardValue = 0;
+    std::uint64_t boardInd = 0;
+    for(auto iter = this->begin(); iter!=this->end(); iter++,boardInd++)
+    {
+        std::unique_ptr<std::pair<OnePlayerChessInfo,double>> oneBoard = *iter;
+        double probability = oneBoard->second;
+        OnePlayerChessInfo& pieceData = oneBoard->first;
+        double pseudoProb = hypotheseDistro.computePseudoBoardProbability(pieceData);
+        if(pseudoProb > maxBoardValue)
+        {
+            maxBoardInd = boardInd;
+            maxBoardValue = pseudoProb;
+        }
+    }
+    return maxBoardInd;
+}
+
+void ChessInformationSet::computeBoardProbabilities
+(
+    Distribution& hypotheseDistro,
+    std::vector<double>& probabilities
+)
+{
+    using CIS = ChessInformationSet;
+    
+    probabilities.resize(this->size());
+    std::uint64_t boardInd=0;
+    for(auto iter = this->begin(); iter!=this->end(); iter++,boardInd++)
+    {
+        std::unique_ptr<std::pair<OnePlayerChessInfo,double>> oneBoard = *iter;
+        double probability = oneBoard->second;
+        OnePlayerChessInfo& pieceData = oneBoard->first;
+        double pseudoProb = hypotheseDistro.computePseudoBoardProbability(pieceData);
+        probabilities[boardInd] = pseudoProb;
+    }
 }
 
 std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeDistribution()
@@ -807,6 +867,7 @@ double ChessInformationSet::Distribution::computeScanAreaValue
     scanAreaValues[8] = values[scanAreaRunInd];
     
     /*
+    std::cout<<scanSquare.to_string();
     for(double val : scanAreaValues)
         std::cout<<" "<<val;
     std::cout<<std::endl;
@@ -834,6 +895,28 @@ void ChessInformationSet::Distribution::computeDistributionPseudoJointEntropy
         CIS::Square scanSquare = scanBoardIndexToSquare(scanIndex);        
         scanSquareEntropy[scanIndex] = CIS::Distribution::computeScanAreaValue(hypotheseDistro.squareEntropy,scanSquare,sumEntropy);
     }
+}
+
+double ChessInformationSet::Distribution::computePseudoBoardProbability
+(
+    OnePlayerChessInfo& board
+)
+{
+    using CIS=ChessInformationSet;
+    double probability = 1;
+    
+    std::array<std::array<double,64>*,6> distribution = { &pawns,&knights,&bishops,&rooks,&queens,&kings };
+    std::array<std::vector<CIS::Square>*,6> boardPtr = { &(board.pawns),&(board.knights),&(board.bishops),&(board.rooks),&(board.queens),&(board.kings) };
+    
+    for(uint pieceTypeInd=0; pieceTypeInd<6; pieceTypeInd++)
+    {
+        for(CIS::Square sq : *(boardPtr[pieceTypeInd]))
+        {
+            uint8_t boardIndex = squareToBoardIndex(sq);
+            probability *= (*(distribution[pieceTypeInd]))[boardIndex];
+        }
+    }
+    return probability;
 }
 
 void ChessInformationSet::add
@@ -888,6 +971,10 @@ void ChessInformationSet::OnePlayerChessInfo::applyMove
 )
 {
     using CIS = ChessInformationSet;
+    
+    if(from==to)
+        return
+    
     lastMoveOpponentConditions.clear();
 
     //process possible promotion of pawn
@@ -1001,8 +1088,11 @@ void ChessInformationSet::OnePlayerChessInfo::applyMove
         int step = static_cast<int>(to.row)-static_cast<int>(from.row);
         uint stepSize = std::abs(step);
         bool doubleStep = (stepSize==2)?true:false;
-        if(stepSize!=1 && stepSize!=2)
+        if(stepSize!=0 && stepSize!=1 && stepSize!=2)
+        {
+            std::cout<<"Pawn from "<<from.to_string()<<" to "<<to.to_string()<<std::endl;
             throw std::logic_error("Pawn must move eiter one or two steps forward!");
+        }
         auto pawnIter = pawnGetter(from);
         if(pawnIter==pawns.end())
             throw std::logic_error("Moved pawn from nonexistant position!");
@@ -1071,13 +1161,35 @@ void ChessInformationSet::OnePlayerChessInfo::applyMove
     }
 }
 
-void ChessInformationSet::removeIncompatibleBoards()
+void ChessInformationSet::removeIncompatibleBoards(std::uint64_t minSize)
 {
-    while(!incompatibleBoards.empty())
+    std::uint64_t validSize = this->validSize();
+    std::uint64_t removeSize = incompatibleBoards.size();
+    std::uint64_t remainingSize = validSize - removeSize;
+    if(removeSize>validSize)
+        remainingSize = 0;
+    
+    std::cout<<"Remove incomp Boards: validSize:"<<validSize<<" removeSize:"<<removeSize<<" remainingSize:"<<remainingSize<<"/"<<minSize<<std::endl;
+    
+    std::unordered_set<std::uint64_t> boardsToKeep;
+    if(remainingSize<minSize)
     {
-        std::uint64_t ind = incompatibleBoards.front();
-        InformationSet<chessInfoSize>::remove(ind);
-        incompatibleBoards.pop();
+        clearRemoved();
+        std::uint64_t demandedSize = minSize;
+        std::unique_ptr<Distribution> distribution = computeDistributionGPU();
+        std::unique_ptr<std::vector<std::uint64_t>> topBoards = computeTheNMostProbableBoardsGPU(*distribution,demandedSize);
+        boardsToKeep.insert(topBoards->begin(),topBoards->end());
+        std::cout<<"Reduce information set to less than min: "<<minSize<<std::endl;
+    }
+    else
+    {
+        while(!incompatibleBoards.empty())
+        {
+            std::uint64_t ind = incompatibleBoards.front();
+            if(boardsToKeep.find(ind)==boardsToKeep.end())
+                InformationSet<chessInfoSize>::remove(ind);
+            incompatibleBoards.pop();
+        }
     }
 }
 

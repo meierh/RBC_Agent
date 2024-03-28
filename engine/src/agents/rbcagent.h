@@ -42,6 +42,8 @@ class RBCAgent : public MCTSAgent
     using CIS = ChessInformationSet;
     
 public:
+    void recordInformationSetSize(std::ostream& dataFile);
+    
     enum ScanStrategies 
     {
         maxScanEntropy,minScanEntropy,
@@ -63,17 +65,8 @@ public:
         PieceColor forceColor = PieceColor::empty
     );
     
-private:   
-    enum Player {Self, Opponent};
     enum MovePhase : std::uint8_t {Sense=0,Move=1};
-    bool useGPU = true;
-    
-    static open_spiel::chess::Color AgentColor_to_OpenSpielColor(const PieceColor agent_pC);
-    static PieceColor OpenSpielColor_to_RBCColor(const open_spiel::chess::Color os_pC);
-    
-    static open_spiel::rbc::MovePhase AgentPhase_to_OpenSpielPhase(const MovePhase agent_pC);
-    static MovePhase OpenSpielPhase_to_RBCPhase(const open_spiel::rbc::MovePhase os_pC);
-    
+    enum Player {Self, Opponent};
     class FullChessInfo
     {
         public:
@@ -134,6 +127,16 @@ private:
             
             static void splitFEN(std::string fen, std::vector<std::string>& fenParts);
     };
+    
+private:   
+    bool useGPU = true;
+    const std::uint64_t maxCISSize = 10000;
+    
+    static open_spiel::chess::Color AgentColor_to_OpenSpielColor(const PieceColor agent_pC);
+    static PieceColor OpenSpielColor_to_RBCColor(const open_spiel::chess::Color os_pC);
+    
+    static open_spiel::rbc::MovePhase AgentPhase_to_OpenSpielPhase(const MovePhase agent_pC);
+    static MovePhase OpenSpielPhase_to_RBCPhase(const open_spiel::rbc::MovePhase os_pC);
 
     CIS::OnePlayerChessInfo playerPiecesTracker;
     PieceColor selfColor;
@@ -153,6 +156,10 @@ protected:
     std::uniform_int_distribution<unsigned short> randomScanDist;
     std::uniform_int_distribution<std::uint64_t> randomHypotheseSelect;
     std::unique_ptr<ChessInformationSet> cis;
+    
+    std::bitset<chessInfoSize> trueOpponentBoard;
+    std::string trueFEN;
+    
     
     std::pair<std::array<std::uint8_t,9>,std::array<CIS::Square,9>> getSensingBoardIndexes(CIS::Square sq);
     
@@ -310,6 +317,8 @@ private:
      * @brief
      */
     StateObj* setupMoveSearchState();
+
+    bool equalBoards(const std::bitset<chessInfoSize> trueBoard, const std::bitset<chessInfoSize> hypotheseBoard) const;    
     
     /**
      * @brief
@@ -326,6 +335,7 @@ private:
     FRIEND_TEST(chessinformationset_test, getIncompatibleGPU_test);
     FRIEND_TEST(chessinformationset_test, getDistribution_test1);
     FRIEND_TEST(chessinformationset_test, getDistribution_test2);
+    FRIEND_TEST(chessinformationset_test, getDistribution_test3);
     FRIEND_TEST(chessinformationset_test, getEntropyGPU_test);
     FRIEND_TEST(chessinformationset_test, getMostProbable_test);
 };

@@ -2,6 +2,7 @@
 
 #include <cuda_runtime_api.h>
 #include <cuda.h>
+#include "rbcagent.h"
 
 namespace crazyara {
 
@@ -122,16 +123,23 @@ void ChessInformationSet::markIncompatibleBoardsGPU
     std::cout<<std::endl;
     
     //std::cout<<"incompatibleBoards.empty():"<<incompatibleBoards.empty()<<std::endl;
-    
-    std::unique_ptr<std::vector<std::uint8_t>> incompatibleBoard = checkBoardsValidGPU(conditions);
-    for(std::uint64_t index=0; index<incompatibleBoard->size(); index++)
+    try
     {
-        //std::cout<<"index:"<<index<<" -- "<<int((*incompatibleBoard)[index])<<std::endl;
-        if((*incompatibleBoard)[index]==0)
+        std::unique_ptr<std::vector<std::uint8_t>> incompatibleBoard = checkBoardsValidGPU(conditions);
+        for(std::uint64_t index=0; index<incompatibleBoard->size(); index++)
         {
-            std::cout<<"Remove "<<index<<std::endl;
-            incompatibleBoards.push(index);
+            //std::cout<<"index:"<<index<<" -- "<<int((*incompatibleBoard)[index])<<std::endl;
+            if((*incompatibleBoard)[index]==0)
+            {
+                std::cout<<"Remove "<<index<<std::endl;
+                incompatibleBoards.push(index);
+            }
         }
+    }
+    catch(...)
+    {
+        std::cout<<"Mark incompatibleBoard on CUDA failed; Use CPU"<<std::endl;
+        markIncompatibleBoards(conditions);
     }
     //std::cout<<"incompatibleBoards.empty():"<<incompatibleBoards.empty()<<std::endl;
 }
@@ -403,106 +411,127 @@ std::unique_ptr<ChessInformationSet::Distribution> ChessInformationSet::computeD
     if(size()<1 || size()!=validSize())
         throw std::logic_error("Computing hypothese from invalid cis set");  
     
-    std::uint64_t cis_size = size();
-    if(cis_size==0)
-        throw std::logic_error("Can not compute distribution from zero size hypothese set");
-    std::uint64_t maxSize = 1;
-    maxSize = maxSize<<32;
-    if(cis_size >= maxSize)
+    std::unique_ptr<Distribution> piecesDistro;
+    try
     {
-        std::cout<<"cis_size:"<<cis_size<<" > "<<maxSize<<std::endl;
-        throw std::invalid_argument("CIS size too big");
-    }
-    std::uint64_t cis_byte_size = cis_size*(chessInfoSize/8);
-    std::uint8_t* hostInfoSetPtr = getInfoSetPtr();
-    uint8_t* deviceInfoSetPtr;
-    CHECK(cudaMalloc((void**)&deviceInfoSetPtr,cis_byte_size*sizeof(uint8_t)),"412");
-    CHECK(cudaMemcpy(deviceInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice),"cis 413");
     
-    dim3 blocks(32);
-    
-    std::uint64_t maxNbrBlocks = 60000;
-    std::uint64_t boardsPerBlock = cis_size / maxNbrBlocks;
-    std::uint64_t boardsPerThread = boardsPerBlock / blocks.x;
-    std::uint64_t minBoardsPerThread = 8;
-    if(boardsPerThread < minBoardsPerThread)
-        boardsPerThread = minBoardsPerThread;    
-    dim3 grids(ceil((float)cis_size/(blocks.x*boardsPerThread)));
-    //std::cout<<"cis_size:"<<cis_size<<" > "<<maxSize<<std::endl;
-    //std::cout<<"blocks.x:"<<blocks.x<<std::endl;
-    //std::cout<<"grids.x:"<<grids.x<<std::endl;
-    
-    uint32_t* deviceBoardSumIn;
-    CHECK(cudaMalloc((void**)&deviceBoardSumIn,grids.x*6*64*sizeof(uint32_t)),"cis 429");
-    
-    uint32_t* deviceBoardSumOut;
-    CHECK(cudaMalloc((void**)&deviceBoardSumOut,grids.x*6*64*sizeof(uint32_t)),"cis 432");
-    
-    initialReduceDistr<<<grids,blocks>>>
-    (
-        deviceInfoSetPtr,
-        cis_size,
-        deviceBoardSumIn
-    );
-    cudaDeviceSynchronize();
-    //std::cout<<"Initial reduction"<<std::endl;
-    
-    std::uint64_t inGridSize = grids.x;
-    std::uint64_t outGridSize;
-    while(inGridSize>1)
-    {
-        outGridSize = ceil((float)inGridSize / 128);
-        grids = dim3(outGridSize);
-        //std::cout<<"inGridSize:"<<inGridSize<<std::endl;
-        //std::cout<<"outGridSize:"<<outGridSize<<std::endl;
-        reduceDistr<<<grids,blocks>>>
+        std::uint64_t cis_size = size();
+        if(cis_size==0)
+            throw std::logic_error("Can not compute distribution from zero size hypothese set");
+        std::uint64_t maxSize = 1;
+        maxSize = maxSize<<32;
+        if(cis_size >= maxSize)
+        {
+            std::cout<<"cis_size:"<<cis_size<<" > "<<maxSize<<std::endl;
+            throw std::invalid_argument("CIS size too big");
+        }
+        std::uint64_t cis_byte_size = cis_size*(chessInfoSize/8);
+        std::uint8_t* hostInfoSetPtr = getInfoSetPtr();
+        uint8_t* deviceInfoSetPtr;
+        CHECK(cudaMalloc((void**)&deviceInfoSetPtr,cis_byte_size*sizeof(uint8_t)),"412");
+        CHECK(cudaMemcpy(deviceInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice),"cis 413");
+        
+        dim3 blocks(32);
+        
+        std::uint64_t maxNbrBlocks = 60000;
+        std::uint64_t boardsPerBlock = cis_size / maxNbrBlocks;
+        std::uint64_t boardsPerThread = boardsPerBlock / blocks.x;
+        std::uint64_t minBoardsPerThread = 8;
+        if(boardsPerThread < minBoardsPerThread)
+            boardsPerThread = minBoardsPerThread;    
+        dim3 grids(ceil((float)cis_size/(blocks.x*boardsPerThread)));
+        //std::cout<<"cis_size:"<<cis_size<<" > "<<maxSize<<std::endl;
+        //std::cout<<"blocks.x:"<<blocks.x<<std::endl;
+        //std::cout<<"grids.x:"<<grids.x<<std::endl;
+        
+        uint32_t* deviceBoardSumIn;
+        CHECK(cudaMalloc((void**)&deviceBoardSumIn,grids.x*6*64*sizeof(uint32_t)),"cis 429");
+        
+        uint32_t* deviceBoardSumOut;
+        CHECK(cudaMalloc((void**)&deviceBoardSumOut,grids.x*6*64*sizeof(uint32_t)),"cis 432");
+        
+        initialReduceDistr<<<grids,blocks>>>
         (
-            deviceBoardSumIn,
-            inGridSize,
-            deviceBoardSumOut
+            deviceInfoSetPtr,
+            cis_size,
+            deviceBoardSumIn
         );
         cudaDeviceSynchronize();
-        inGridSize = outGridSize;
-        uint32_t* temp = deviceBoardSumIn;
-        deviceBoardSumIn = deviceBoardSumOut;
-        deviceBoardSumOut = temp;
-    }
-    //std::cout<<"Copy result back"<<std::endl;
-    std::array<uint32_t,384> piecesSum;
-    CHECK(cudaMemcpy(piecesSum.data(),deviceBoardSumIn,384*sizeof(uint32_t),cudaMemcpyDeviceToHost),"cis 465");
-    
-    /*
-    for(auto count : piecesSum)
-        std::cout<<count<<" ";
-    std::cout<<std::endl;
-    */
-    
-    //std::cout<<"Free"<<std::endl;
-    cudaFree(deviceInfoSetPtr);
-    cudaFree(deviceBoardSumIn);
-    cudaFree(deviceBoardSumOut);
-    
-    //std::cout<<"Compute Fraction"<<std::endl;
-    std::array<double,384> piecesSumDouble;
-    for(uint i=0; i<piecesSum.size(); i++)
-    {
-        if(piecesSum[i]<0 || piecesSum[i]>cis_size)
+        //std::cout<<"Initial reduction"<<std::endl;
+        
+        std::uint64_t inGridSize = grids.x;
+        std::uint64_t outGridSize;
+        while(inGridSize>1)
         {
-            std::cout<<"piecesSum["<<i<<"]:"<<piecesSum[i]<<"/"<<cis_size<<std::endl;
-            throw std::logic_error("Invalid piecesSum");
+            outGridSize = ceil((float)inGridSize / 128);
+            grids = dim3(outGridSize);
+            //std::cout<<"inGridSize:"<<inGridSize<<std::endl;
+            //std::cout<<"outGridSize:"<<outGridSize<<std::endl;
+            reduceDistr<<<grids,blocks>>>
+            (
+                deviceBoardSumIn,
+                inGridSize,
+                deviceBoardSumOut
+            );
+            cudaDeviceSynchronize();
+            inGridSize = outGridSize;
+            uint32_t* temp = deviceBoardSumIn;
+            deviceBoardSumIn = deviceBoardSumOut;
+            deviceBoardSumOut = temp;
         }
-        piecesSumDouble[i] = static_cast<double>(piecesSum[i]) / cis_size;
+        //std::cout<<"Copy result back"<<std::endl;
+        std::array<uint32_t,384> piecesSum;
+        CHECK(cudaMemcpy(piecesSum.data(),deviceBoardSumIn,384*sizeof(uint32_t),cudaMemcpyDeviceToHost),"cis 465");
+        
+        /*
+        for(auto count : piecesSum)
+            std::cout<<count<<" ";
+        std::cout<<std::endl;
+        */
+        
+        //std::cout<<"Free"<<std::endl;
+        cudaFree(deviceInfoSetPtr);
+        cudaFree(deviceBoardSumIn);
+        cudaFree(deviceBoardSumOut);
+        
+        //std::cout<<"Compute Fraction"<<std::endl;
+        std::array<double,384> piecesSumDouble;
+        for(uint i=0; i<piecesSum.size(); i++)
+        {
+            if(piecesSum[i]<0 || piecesSum[i]>cis_size)
+            {
+                std::cout<<"piecesSum["<<i<<"]:"<<piecesSum[i]<<"/"<<cis_size<<std::endl;
+                
+                std::vector<std::string> fens;
+                for(auto iter=begin(); iter!=end(); iter++)
+                {
+                    std::unique_ptr<std::pair<OnePlayerChessInfo,double>> white = *iter;
+                    OnePlayerChessInfo black;
+                    std::string fen = RBCAgent::FullChessInfo::getFEN(white->first,black,RBCAgent::PieceColor::white,1);
+                    fens.push_back(fen);
+                }
+                
+                std::ofstream file("fen_capture.data");
+                for(auto& itr : fens)
+                    file << itr << std::endl;
+                throw std::logic_error("Invalid piecesSum");
+            }
+            piecesSumDouble[i] = static_cast<double>(piecesSum[i]) / cis_size;
+        }
+        
+        //std::cout<<"Compute Distribution"<<std::endl;
+        piecesDistro = std::make_unique<Distribution>();
+        std::memcpy(piecesDistro->pawns.data(),  piecesSumDouble.data(),    64*sizeof(double));
+        std::memcpy(piecesDistro->knights.data(),piecesSumDouble.data()+64, 64*sizeof(double));
+        std::memcpy(piecesDistro->bishops.data(),piecesSumDouble.data()+128,64*sizeof(double));
+        std::memcpy(piecesDistro->rooks.data(),  piecesSumDouble.data()+192,64*sizeof(double));
+        std::memcpy(piecesDistro->queens.data(), piecesSumDouble.data()+256,64*sizeof(double));
+        std::memcpy(piecesDistro->kings.data(),  piecesSumDouble.data()+320,64*sizeof(double));
     }
-    
-    //std::cout<<"Compute Distribution"<<std::endl;
-    auto piecesDistro = std::make_unique<Distribution>();
-    std::memcpy(piecesDistro->pawns.data(),  piecesSumDouble.data(),    64*sizeof(double));
-    std::memcpy(piecesDistro->knights.data(),piecesSumDouble.data()+64, 64*sizeof(double));
-    std::memcpy(piecesDistro->bishops.data(),piecesSumDouble.data()+128,64*sizeof(double));
-    std::memcpy(piecesDistro->rooks.data(),  piecesSumDouble.data()+192,64*sizeof(double));
-    std::memcpy(piecesDistro->queens.data(), piecesSumDouble.data()+256,64*sizeof(double));
-    std::memcpy(piecesDistro->kings.data(),  piecesSumDouble.data()+320,64*sizeof(double));
-    //std::cout<<"Return"<<std::endl;
+    catch(std::logic_error err)
+    {
+        piecesDistro = computeDistribution();
+    }
     return piecesDistro;
 }
 
@@ -1019,13 +1048,163 @@ __global__ void reduceMostProbable // blockDim.x == 32
     }
 }
 
-std::uint64_t ChessInformationSet::computeMostProbableBoard
+std::uint64_t ChessInformationSet::computeMostProbableBoardGPU
 (
     Distribution& hypotheseDistro
 )
 {
-    //std::cout<<hypotheseDistro.printComplete()<<std::endl;
-    
+    try
+    {
+        std::array<double,384> distributionfp64;
+        std::memcpy(distributionfp64.data(),    hypotheseDistro.pawns.data(),  64*sizeof(double));
+        std::memcpy(distributionfp64.data()+64, hypotheseDistro.knights.data(),64*sizeof(double));
+        std::memcpy(distributionfp64.data()+128,hypotheseDistro.bishops.data(),64*sizeof(double));
+        std::memcpy(distributionfp64.data()+192,hypotheseDistro.rooks.data(),  64*sizeof(double));
+        std::memcpy(distributionfp64.data()+256,hypotheseDistro.queens.data(), 64*sizeof(double));
+        std::memcpy(distributionfp64.data()+320,hypotheseDistro.kings.data(),  64*sizeof(double));
+        
+        std::array<float,384> distributionfp32;
+        for(uint i=0; i<distributionfp32.size(); i++)
+            distributionfp32[i] = distributionfp64[i];
+        float* deviceDistribution;
+        CHECK(cudaMalloc((void**)&deviceDistribution,distributionfp32.size()*sizeof(float)));
+        CHECK(cudaMemcpy(deviceDistribution,distributionfp32.data(),distributionfp32.size()*sizeof(float),cudaMemcpyHostToDevice));    
+        
+        //std::cout<<"Compute Distribution"<<std::endl;
+        std::uint64_t cis_size = size();
+        std::uint64_t maxSize = 1;
+        maxSize = maxSize<<32;
+        if(cis_size >= maxSize)
+        {
+            std::cout<<"cis_size:"<<cis_size<<" > "<<maxSize<<std::endl;
+            throw std::invalid_argument("CIS size too big");
+        }
+        std::uint64_t cis_byte_size = cis_size*(chessInfoSize/8);
+        std::uint8_t* hostInfoSetPtr = getInfoSetPtr();
+        uint8_t* deviceInfoSetPtr;
+        CHECK(cudaMalloc((void**)&deviceInfoSetPtr,cis_byte_size*sizeof(uint8_t)));
+        CHECK(cudaMemcpy(deviceInfoSetPtr,hostInfoSetPtr,cis_byte_size*sizeof(uint8_t),cudaMemcpyHostToDevice));
+        
+        //std::cout<<"Iterative board probabilites reduction"<<std::endl;
+
+        
+    //Compute board probabilties
+        int blockSize;
+        int minGridSize;
+        cudaOccupancyMaxPotentialBlockSize( &minGridSize, &blockSize,computeBoardProbabilty, 0, 0);
+        int gridsize = (cis_size + blockSize - 1) / blockSize;
+        dim3 blocks(blockSize);
+        dim3 grids(gridsize);
+        
+        //std::cout<<"cis_size:"<<cis_size<<std::endl;
+        //std::cout<<"blockSize:"<<blockSize<<std::endl;
+        //std::cout<<"gridsize:"<<gridsize<<std::endl;
+        
+        double* boardProbabilities;
+        CHECK(cudaMalloc((void**)&boardProbabilities,cis_size*sizeof(double)));
+        
+        computeBoardProbabilty<<<grids,blocks>>>
+        (
+            deviceDistribution,
+            deviceInfoSetPtr,
+            cis_size,
+            boardProbabilities
+        );
+        cudaDeviceSynchronize();
+        //std::cout<<"Computed board probabilites"<<std::endl;
+        
+        cudaFree(deviceDistribution);
+        cudaFree(deviceInfoSetPtr);
+        
+    // Initial reduce most probable board
+        std::uint64_t threadPerBlocks = 512;
+        std::uint64_t boardsPerThread = 10;
+        blocks = dim3(threadPerBlocks);
+        grids = dim3(ceil((float)cis_size/(threadPerBlocks*boardsPerThread)));
+
+        uint64_t* mostProbableIndexIn;
+        CHECK(cudaMalloc((void**)&mostProbableIndexIn,grids.x*sizeof(uint64_t)));
+        
+        double* mostProbableValueIn;
+        CHECK(cudaMalloc((void**)&mostProbableValueIn,grids.x*sizeof(double)));
+        
+        initialReduceMostProbable<<<grids,blocks>>>
+        (
+            boardProbabilities,
+            cis_size,
+            mostProbableValueIn,
+            mostProbableIndexIn
+        );
+        cudaDeviceSynchronize();
+        //std::cout<<"Initial board probabilites reduction"<<std::endl;
+        
+        cudaFree(boardProbabilities);    
+        
+    // Iterative reduce most probable board
+        std::uint64_t reductionSize = 128;
+        blocks = dim3(32);
+        
+        std::uint64_t inSize = grids.x;
+        std::uint64_t outSize = ceil((float)inSize / reductionSize);
+        
+        uint64_t* mostProbableIndexOut;
+        CHECK(cudaMalloc((void**)&mostProbableIndexOut,outSize*sizeof(uint64_t)));
+        
+        double* mostProbableValueOut;
+        CHECK(cudaMalloc((void**)&mostProbableValueOut,outSize*sizeof(double)));
+                
+        while(inSize>1)
+        {
+            grids = dim3(outSize);
+            //std::cout<<"grids:"<<grids.x<<" blocks:"<<blocks.x<<std::endl;
+            reduceMostProbable<<<grids,blocks>>>
+            (
+                mostProbableIndexIn,
+                mostProbableValueIn,
+                inSize,
+                mostProbableIndexOut,
+                mostProbableValueOut
+            );
+            //std::cout<<"Iterative board probabilites reduction"<<std::endl;
+            cudaDeviceSynchronize();
+            
+            uint64_t* tempIndex = mostProbableIndexIn;
+            mostProbableIndexIn = mostProbableIndexOut;
+            mostProbableIndexOut = tempIndex;
+            
+            double* tempVal = mostProbableValueIn;
+            mostProbableValueIn = mostProbableValueOut;
+            mostProbableValueOut = tempVal;
+            
+            inSize = outSize;
+            outSize = ceil((float)inSize / reductionSize);
+        }
+        //std::cout<<"Copy result back"<<std::endl;
+        double mostProbableValue;
+        CHECK(cudaMemcpy(&mostProbableValue,mostProbableValueIn,sizeof(double),cudaMemcpyDeviceToHost));
+        
+        uint64_t mostProbableIndex;
+        CHECK(cudaMemcpy(&mostProbableIndex,mostProbableIndexIn,sizeof(uint64_t),cudaMemcpyDeviceToHost));
+            
+        cudaFree(mostProbableIndexIn);
+        cudaFree(mostProbableValueIn);
+        cudaFree(mostProbableIndexOut);
+        cudaFree(mostProbableValueOut);
+        
+        return mostProbableIndex;
+    }
+    catch(...)
+    {
+        return computeMostProbableBoard(hypotheseDistro);
+    }
+}
+
+void ChessInformationSet::computeBoardProbabilitiesGPU
+(
+    Distribution& hypotheseDistro,
+    std::vector<double>& probabilities
+)
+{
     std::array<double,384> distributionfp64;
     std::memcpy(distributionfp64.data(),    hypotheseDistro.pawns.data(),  64*sizeof(double));
     std::memcpy(distributionfp64.data()+64, hypotheseDistro.knights.data(),64*sizeof(double));
@@ -1073,7 +1252,7 @@ std::uint64_t ChessInformationSet::computeMostProbableBoard
     
     double* boardProbabilities;
     CHECK(cudaMalloc((void**)&boardProbabilities,cis_size*sizeof(double)));
-       
+    
     computeBoardProbabilty<<<grids,blocks>>>
     (
         deviceDistribution,
@@ -1087,82 +1266,51 @@ std::uint64_t ChessInformationSet::computeMostProbableBoard
     cudaFree(deviceDistribution);
     cudaFree(deviceInfoSetPtr);
     
-// Initial reduce most probable board
-    std::uint64_t threadPerBlocks = 512;
-    std::uint64_t boardsPerThread = 10;
-    blocks = dim3(threadPerBlocks);
-    grids = dim3(ceil((float)cis_size/(threadPerBlocks*boardsPerThread)));
+    probabilities.resize(cis_size);
+    CHECK(cudaMemcpy(probabilities.data(),boardProbabilities,cis_size*sizeof(double),cudaMemcpyDeviceToHost));
+    cudaFree(boardProbabilities);
+}
 
-    uint64_t* mostProbableIndexIn;
-    CHECK(cudaMalloc((void**)&mostProbableIndexIn,grids.x*sizeof(uint64_t)));
-    
-    double* mostProbableValueIn;
-    CHECK(cudaMalloc((void**)&mostProbableValueIn,grids.x*sizeof(double)));
-    
-    initialReduceMostProbable<<<grids,blocks>>>
-    (
-        boardProbabilities,
-        cis_size,
-        mostProbableValueIn,
-        mostProbableIndexIn
-    );
-    cudaDeviceSynchronize();
-    //std::cout<<"Initial board probabilites reduction"<<std::endl;
-    
-    cudaFree(boardProbabilities);    
-    
-// Iterative reduce most probable board
-    std::uint64_t reductionSize = 128;
-    blocks = dim3(32);
-    
-    std::uint64_t inSize = grids.x;
-    std::uint64_t outSize = ceil((float)inSize / reductionSize);
-    
-    uint64_t* mostProbableIndexOut;
-    CHECK(cudaMalloc((void**)&mostProbableIndexOut,outSize*sizeof(uint64_t)));
-    
-    double* mostProbableValueOut;
-    CHECK(cudaMalloc((void**)&mostProbableValueOut,outSize*sizeof(double)));
-            
-    while(inSize>1)
+std::unique_ptr<std::vector<std::uint64_t>> ChessInformationSet::computeTheNMostProbableBoardsGPU
+(
+    Distribution& hypotheseDistro,
+    std::uint64_t& numberOfBoards
+)
+{
+    std::uint64_t cis_size = size();
+    std::vector<double> probabilities;
+
+    try
     {
-        grids = dim3(outSize);
-        //std::cout<<"grids:"<<grids.x<<" blocks:"<<blocks.x<<std::endl;
-        reduceMostProbable<<<grids,blocks>>>
-        (
-            mostProbableIndexIn,
-            mostProbableValueIn,
-            inSize,
-            mostProbableIndexOut,
-            mostProbableValueOut
-        );
-        //std::cout<<"Iterative board probabilites reduction"<<std::endl;
-        cudaDeviceSynchronize();
-        
-        uint64_t* tempIndex = mostProbableIndexIn;
-        mostProbableIndexIn = mostProbableIndexOut;
-        mostProbableIndexOut = tempIndex;
-        
-        double* tempVal = mostProbableValueIn;
-        mostProbableValueIn = mostProbableValueOut;
-        mostProbableValueOut = tempVal;
-        
-        inSize = outSize;
-        outSize = ceil((float)inSize / reductionSize);
+        computeBoardProbabilitiesGPU(hypotheseDistro,probabilities);
     }
-    //std::cout<<"Copy result back"<<std::endl;
-    double mostProbableValue;
-    CHECK(cudaMemcpy(&mostProbableValue,mostProbableValueIn,sizeof(double),cudaMemcpyDeviceToHost));
+    catch(...)
+    {
+        computeBoardProbabilities(hypotheseDistro,probabilities);
+    }
     
-    uint64_t mostProbableIndex;
-    CHECK(cudaMemcpy(&mostProbableIndex,mostProbableIndexIn,sizeof(uint64_t),cudaMemcpyDeviceToHost));
-        
-    cudaFree(mostProbableIndexIn);
-    cudaFree(mostProbableValueIn);
-    cudaFree(mostProbableIndexOut);
-    cudaFree(mostProbableValueOut);
-
-    return mostProbableIndex;
+    
+    std::vector<std::pair<std::uint64_t,double>> sortBoardProbVec(cis_size);
+    for(uint cisIndex=0; cisIndex<cis_size; cisIndex++)
+    {
+        sortBoardProbVec[cisIndex] = {cisIndex,probabilities[cisIndex]};
+    }
+    
+    auto comparer = [](std::pair<std::uint64_t,double> a, std::pair<std::uint64_t,double> b)
+    {
+        return a.second > b.second; 
+    };
+    std::sort(sortBoardProbVec.begin(),sortBoardProbVec.end(),comparer);
+    
+    numberOfBoards = std::min(numberOfBoards,cis_size);
+    
+    auto theMostProbableBoards = std::make_unique<std::vector<std::uint64_t>>(numberOfBoards);
+    for(std::uint64_t mostProbInd=0; mostProbInd<numberOfBoards; mostProbInd++)
+    {
+        (*theMostProbableBoards)[mostProbInd] = sortBoardProbVec[mostProbInd].first;
+    }
+    
+    return theMostProbableBoards;
 }
 
 __device__ uint16_t scanBoardToIndex

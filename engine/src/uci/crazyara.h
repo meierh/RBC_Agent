@@ -185,7 +185,7 @@ public:
     /**
      * Testing method for rbcAgent
      */
-    void rbcTest();
+    void rbcTest(int argc, char* argv[]);
 
 #ifdef USE_RL
     /**

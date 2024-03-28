@@ -450,6 +450,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
                 static void computeDistributionPseudoJointEntropy(Distribution&);
                 
                 bool operator==(const Distribution& rhs) const;
+                
+                double computePseudoBoardProbability(OnePlayerChessInfo& board);
         };
         
         std::unique_ptr<Distribution> computeDistribution();
@@ -457,7 +459,19 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         
         void computeHypotheseEntropyGPU(Distribution&);
         
+        std::uint64_t computeMostProbableBoardGPU(Distribution&);
+        
         std::uint64_t computeMostProbableBoard(Distribution&);
+        
+        void computeBoardProbabilitiesGPU(Distribution& hypotheseDistro, std::vector<double>& probabilities);
+        
+        void computeBoardProbabilities(Distribution& hypotheseDistro, std::vector<double>& probabilities);
+        
+        std::unique_ptr<std::vector<std::uint64_t>> computeTheNMostProbableBoardsGPU
+        (
+            Distribution& hypotheseDistro,
+            std::uint64_t& numberOfBoards
+        );   
         
         /**
          * Marks boards incompatible with observations
@@ -478,7 +492,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         
         //bool evaluateHornClause(const std::vector<BoardClause>& hornClause, OnePlayerChessInfo& piecesInfo);
         
-        void removeIncompatibleBoards();
+        void removeIncompatibleBoards(std::uint64_t minSize=1);
         
         void add(OnePlayerChessInfo& item, double probability);
         
@@ -583,6 +597,7 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         FRIEND_TEST(chessinformationset_test, boardClause_test);
         FRIEND_TEST(chessinformationset_test, getDistribution_test1);
         FRIEND_TEST(chessinformationset_test, getDistribution_test2);
+        FRIEND_TEST(chessinformationset_test, getDistribution_test3);
         FRIEND_TEST(chessinformationset_test, getEntropyGPU_test);
         FRIEND_TEST(chessinformationset_test, getMostProbable_test);
 };

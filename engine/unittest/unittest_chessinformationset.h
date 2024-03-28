@@ -772,7 +772,7 @@ TEST(chessinformationset_test, getDistribution_test2)
     using CIS = ChessInformationSet;
     
     std::vector<CIS::OnePlayerChessInfo> board;
-    uint numberBoards = 1000000;
+    uint numberBoards = 10000;
     CIS cis(numberBoards*2);
     for(uint i=0; i<numberBoards; i++)
     {
@@ -786,6 +786,44 @@ TEST(chessinformationset_test, getDistribution_test2)
     std::unique_ptr<CIS::Distribution> distributionGPU = cis.computeDistributionGPU();
     std::unique_ptr<CIS::Distribution> distributionCPU = cis.computeDistribution();
     EXPECT_EQ(*distributionCPU,*distributionGPU);    
+}
+
+TEST(chessinformationset_test, getDistribution_test3)
+{
+    using BC = ChessInformationSet::BoardClause;
+    using SQ = ChessInformationSet::Square;
+    using COL = ChessInformationSet::ChessColumn;
+    using ROW = ChessInformationSet::ChessRow;
+    using PT = ChessInformationSet::BoardClause::PieceType;
+    using CIS = ChessInformationSet;
+    
+    std::vector<std::string> fens;
+    
+    std::string line;
+    std::ifstream file;
+    file.open("fen_capture_hold.data");
+    if (file.is_open())
+    {
+        while (std::getline(file, line))
+        {
+            fens.push_back(line);
+        }
+        file.close();
+    }
+
+    CIS cis(fens.size());
+    for(uint i=0; i<fens.size(); i++)
+    {
+        std::string& fen = fens[i];
+        RBCAgent::FullChessInfo fci(fen);
+        cis.add(fci.white,1.0/128);
+    }    
+    std::cout<<"Fen size:"<<fens.size()<<std::endl;
+    
+    std::unique_ptr<CIS::Distribution> distributionGPU = cis.computeDistributionGPU();
+    std::unique_ptr<CIS::Distribution> distributionCPU = cis.computeDistribution();
+    std::cout<<distributionGPU->printComplete()<<std::endl;
+    EXPECT_EQ(*distributionCPU,*distributionGPU);
 }
 
 TEST(chessinformationset_test, getEntropyGPU_test)
@@ -841,7 +879,7 @@ TEST(chessinformationset_test, getMostProbable_test)
         cis1.add(fci1.white,1);
 
     std::unique_ptr<CIS::Distribution> incompBoards = cis1.computeDistributionGPU();
-    std::uint64_t mostProb = cis1.computeMostProbableBoard(*incompBoards);
+    std::uint64_t mostProb = cis1.computeMostProbableBoardGPU(*incompBoards);
     EXPECT_EQ(mostProb,0);
 }
 

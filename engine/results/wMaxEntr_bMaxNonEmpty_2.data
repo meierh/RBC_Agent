@@ -1,0 +1,73 @@
+RBC Game of type: wMaxEntr_bMaxNonEmpty_2.data
+1
+rnbqkbnr/pppppppp/8/8/8/N7/PPPPPPPP/R1BQKBNR b KQkq - 1 1
+15
+rnbqkbnr/pppp1ppp/4p3/8/8/N7/PPPPPPPP/R1BQKBNR w KQkq - 0 2
+15
+rnbqkbnr/pppp1ppp/4p3/8/8/N2P4/PPP1PPPP/R1BQKBNR b KQkq - 0 2
+15
+rnbqkbnr/ppp2ppp/3pp3/8/8/N2P4/PPP1PPPP/R1BQKBNR w KQkq - 0 3
+1
+rnbqkbnr/ppp2ppp/3pp3/8/8/N2P4/PPPBPPPP/R2QKBNR b KQkq - 1 3
+15
+rnbq1bnr/ppp1kppp/3pp3/8/8/N2P4/PPPBPPPP/R2QKBNR w KQ - 2 4
+1
+rnbq1bnr/ppp1kppp/3pp3/8/8/N2P4/PPPBPPPP/1R1QKBNR b K - 3 4
+177
+rnbq1bnr/1pp1kppp/p2pp3/8/8/N2P4/PPPBPPPP/1R1QKBNR w K - 0 5
+16
+rnbq1bnr/1pp1kppp/p2pp3/8/8/N2P1P2/PPPBP1PP/1R1QKBNR b K - 0 5
+108
+rnbq1bnr/2p1kppp/p2pp3/1p6/8/N2P1P2/PPPBP1PP/1R1QKBNR w K b6 0 6
+177
+rnbq1bnr/2p1kppp/p2pp3/1p6/8/N2P1P2/PPPBP1PP/2RQKBNR b K - 1 6
+1112
+rnbq1bnr/2p1k1pp/p2ppp2/1p6/8/N2P1P2/PPPBP1PP/2RQKBNR w K - 0 7
+931
+rnbq1bnr/2p1k1pp/p2ppp2/1p6/3P4/N4P2/PPPBP1PP/2RQKBNR b K - 0 7
+5059
+r1bq1bnr/2pnk1pp/p2ppp2/1p6/3P4/N4P2/PPPBP1PP/2RQKBNR w K - 1 8
+141
+r1bq1bnr/2pnk1pp/p2ppp2/1p6/3P2P1/N4P2/PPPBP2P/2RQKBNR b K g3 0 8
+4861
+r1bq1bnr/2pnk1pp/3ppp2/pp6/3P2P1/N4P2/PPPBP2P/2RQKBNR w K - 0 9
+261
+r1bq1bnr/2pnk1pp/3ppp2/pp6/3P2P1/N3PP2/PPPB3P/2RQKBNR b K - 0 9
+10000
+r1bq1bnr/2p1k1pp/3ppp2/ppn5/3P2P1/N3PP2/PPPB3P/2RQKBNR w K - 1 10
+1095
+r1bq1bnr/2p1k1pp/3ppp2/ppn5/3P2P1/N3PP2/PPPB1K1P/2RQ1BNR b - - 2 10
+10000
+r1bq1bnr/1np1k1pp/3ppp2/pp6/3P2P1/N3PP2/PPPB1K1P/2RQ1BNR w - - 3 11
+3386
+r1bq1bnr/1np1k1pp/3ppp2/pp6/3PP1P1/N4P2/PPPB1K1P/2RQ1BNR b - - 0 11
+388
+r1b2bnr/1npqk1pp/3ppp2/pp6/3PP1P1/N4P2/PPPB1K1P/2RQ1BNR w - - 1 12
+14
+r1b2bnr/1npqk1pp/3ppp2/pp6/3PPPP1/N7/PPPB1K1P/2RQ1BNR b - - 0 12
+5497
+r1b2bnr/1n1qk1pp/2pppp2/pp6/3PPPP1/N7/PPPB1K1P/2RQ1BNR w - - 0 13
+20
+r1b2bnr/1n1qk1pp/2pppp2/pp6/3PPPP1/N7/PPPB1KBP/2RQ2NR b - - 1 13
+5519
+r1bq1bnr/1n2k1pp/2pppp2/pp6/3PPPP1/N7/PPPB1KBP/2RQ2NR w - - 2 14
+21
+r1bq1bnr/1n2k1pp/2pppp2/pp6/3PPPP1/N6N/PPPB1KBP/2RQ3R b - - 3 14
+9987
+r1bq1bnr/1n3kpp/2pppp2/pp6/3PPPP1/N6N/PPPB1KBP/2RQ3R w - - 4 15
+1
+r1bq1bnr/1n3kpp/2pppp2/pp6/3PPPP1/N6N/PPPB1KBP/2R2Q1R b - - 5 15
+10000
+r1bq1bnr/1n3kpp/2pppp2/p7/1p1PPPP1/N6N/PPPB1KBP/2R2Q1R w - - 0 16
+1
+r1bq1bnr/1n3kpp/2pppp2/p7/1p1PPPP1/N6N/PPPB2BP/2R1KQ1R b - - 1 16
+10000
+r1bq1bnr/1n3kpp/2pp1p2/p3p3/1p1PPPP1/N6N/PPPB2BP/2R1KQ1R w - - 0 17
+16
+r1bq1bnr/1n3kpp/2pp1p2/p3p3/1pQPPPP1/N6N/PPPB2BP/2R1K2R b - - 1 17
+10000
+r2q1bnr/1n3kpp/2pp1p2/p3p3/1pQPPPb1/N6N/PPPB2BP/2R1K2R w - - 0 18
+1
+r2q1bnr/1n3Qpp/2pp1p2/p3p3/1p1PPPb1/N6N/PPPB2BP/2R1K2R b - - 0 18
+
+BLACK_WIN

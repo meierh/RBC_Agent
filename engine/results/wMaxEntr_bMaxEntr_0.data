@@ -1,0 +1,46 @@
+RBC Game of type: wMaxEntr_bMaxEntr_0.data
+
+1
+rnbqkbnr/pppppppp/8/8/7P/8/PPPPPPP1/RNBQKBNR b KQkq h3 0 1
+1
+rnbqkbnr/1ppppppp/p7/8/7P/8/PPPPPPP1/RNBQKBNR w KQkq - 0 2
+15
+rnbqkbnr/1ppppppp/p7/8/7P/5N2/PPPPPPP1/RNBQKB1R b KQkq - 1 2
+16
+rnbqkbnr/2pppppp/p7/1p6/7P/5N2/PPPPPPP1/RNBQKB1R w KQkq b6 0 3
+118
+rnbqkbnr/2pppppp/p7/1p6/P6P/5N2/1PPPPPP1/RNBQKB1R b KQkq a3 0 3
+16
+rnbqkbnr/2ppp1pp/p4p2/1p6/P6P/5N2/1PPPPPP1/RNBQKB1R w KQkq - 0 4
+39
+rnbqkbnr/2ppp1pp/p4p2/1p6/P6P/5N1R/1PPPPPP1/RNBQKB2 b Qkq - 1 4
+28
+r1bqkbnr/2ppp1pp/p1n2p2/1p6/P6P/5N1R/1PPPPPP1/RNBQKB2 w Qkq - 2 5
+36
+r1bqkbnr/2ppp1pp/p1n2p2/1p6/P6P/7R/1PPPPPP1/RNBQKBN1 b Qkq - 3 5
+283
+r1bq1bnr/2pppkpp/p1n2p2/1p6/P6P/7R/1PPPPPP1/RNBQKBN1 w Q - 4 6
+34
+r1bq1bnr/2pppkpp/p1n2p2/1p6/P6P/5N1R/1PPPPPP1/RNBQKB2 b Q - 5 6
+193
+r1bq1bnr/2ppp1pp/p1n1kp2/1p6/P6P/5N1R/1PPPPPP1/RNBQKB2 w Q - 6 7
+270
+r1bq1bnr/2ppp1pp/p1n1kp2/1p6/P6P/4PN1R/1PPP1PP1/RNBQKB2 b Q - 0 7
+537
+r1bq1bnr/2ppp1pp/p3kp2/1p6/Pn5P/4PN1R/1PPP1PP1/RNBQKB2 w Q - 1 8
+1007
+r1bq1bnr/2ppp1pp/p3kp2/1B6/Pn5P/4PN1R/1PPP1PP1/RNBQK3 b Q - 0 8
+33
+r1bq1bnr/2pppkpp/p4p2/1B6/Pn5P/4PN1R/1PPP1PP1/RNBQK3 w Q - 1 9
+1718
+r1bq1bnr/2pppkpp/p4p2/1B6/Pn5P/4PN1R/1PPP1PP1/RNBQ1K2 b - - 2 9
+264
+r1bq1bnr/2pppkpp/p7/1B3p2/Pn5P/4PN1R/1PPP1PP1/RNBQ1K2 w - - 0 10
+533
+r1bq1bnr/2pppkpp/p7/5p2/PnB4P/4PN1R/1PPP1PP1/RNBQ1K2 b - - 1 10
+115
+r2q1bnr/1bpppkpp/p7/5p2/PnB4P/4PN1R/1PPP1PP1/RNBQ1K2 w - - 2 11
+704
+r2q1bnr/1bpppBpp/p7/5p2/Pn5P/4PN1R/1PPP1PP1/RNBQ1K2 b - - 0 11
+
+WHITE_WIN

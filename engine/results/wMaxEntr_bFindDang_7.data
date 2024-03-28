@@ -1,0 +1,53 @@
+RBC Game of type: wMaxEntr_bFindDang_7.data
+1
+rnbqkbnr/pppppppp/8/8/6P1/8/PPPPPP1P/RNBQKBNR b KQkq g3 0 1
+15
+rnbqkbnr/ppppppp1/8/7p/6P1/8/PPPPPP1P/RNBQKBNR w KQkq h6 0 2
+1
+rnbqkbnr/ppppppp1/8/7p/6P1/5N2/PPPPPP1P/RNBQKB1R b KQkq - 1 2
+160
+r1bqkbnr/ppppppp1/n7/7p/6P1/5N2/PPPPPP1P/RNBQKB1R w KQkq - 2 3
+1
+r1bqkbnr/ppppppp1/n7/7p/6PN/8/PPPPPP1P/RNBQKB1R b KQkq - 3 3
+1601
+r1bqkbnr/pp1pppp1/n1p5/7p/6PN/8/PPPPPP1P/RNBQKB1R w KQkq - 0 4
+13
+r1bqkbnr/pp1pppp1/n1p5/7p/6PN/2P5/PP1PPP1P/RNBQKB1R b KQkq - 0 4
+386
+r1b1kbnr/ppqpppp1/n1p5/7p/6PN/2P5/PP1PPP1P/RNBQKB1R w KQkq - 1 5
+1
+r1b1kbnr/ppqpppp1/n1p5/7p/6P1/2P5/PP1PPPNP/RNBQKB1R b KQkq - 2 5
+2942
+r1b1kbnr/pp1pppp1/nqp5/7p/6P1/2P5/PP1PPPNP/RNBQKB1R w KQkq - 3 6
+1
+r1b1kbnr/pp1pppp1/nqp5/7p/5NP1/2P5/PP1PPP1P/RNBQKB1R b KQkq - 4 6
+5625
+r1b1kbnr/pp2ppp1/nqp5/3p3p/5NP1/2P5/PP1PPP1P/RNBQKB1R w KQkq d6 0 7
+16
+r1b1kbnr/pp2ppp1/nqp5/3p3p/5NP1/2P5/PPQPPP1P/RNB1KB1R b KQkq - 1 7
+7154
+r1bqkbnr/pp2ppp1/n1p5/3p3p/5NP1/2P5/PPQPPP1P/RNB1KB1R w KQkq - 2 8
+40
+r1bqkbnr/pp2ppp1/n1p5/3p3p/P4NP1/2P5/1PQPPP1P/RNB1KB1R b KQkq a3 0 8
+10000
+1rbqkbnr/pp2ppp1/n1p5/3p3p/P4NP1/2P5/1PQPPP1P/RNB1KB1R w KQk - 1 9
+2
+1rbqkbnr/pp2ppp1/n1p5/3p3p/P4NP1/2P4B/1PQPPP1P/RNB1K2R b KQk - 2 9
+9994
+1rbqkbnr/pp2p1p1/n1p2p2/3p3p/P4NP1/2P4B/1PQPPP1P/RNB1K2R w KQk - 0 10
+17
+1rbqkbnr/pp2p1p1/n1p2p2/3p3p/P5P1/2P4B/1PQPPPNP/RNB1K2R b KQk - 1 10
+2877
+1r1qkbnr/pp2p1p1/n1p2p2/3p3p/P5b1/2P4B/1PQPPPNP/RNB1K2R w KQk - 0 11
+1
+1r1qkbnr/pp2p1p1/n1p2p2/3p3p/P5B1/2P5/1PQPPPNP/RNB1K2R b KQk - 0 11
+4
+1r1qkbnr/p3p1p1/n1p2p2/1p1p3p/P5B1/2P5/1PQPPPNP/RNB1K2R w KQk b6 0 12
+16
+1r1qkbnr/p3p1p1/n1p2pQ1/1p1p3p/P5B1/2P5/1P1PPPNP/RNB1K2R b KQk - 1 12
+101
+1r2kbnr/p1q1p1p1/n1p2pQ1/1p1p3p/P5B1/2P5/1P1PPPNP/RNB1K2R w KQk - 2 13
+11
+1r2Qbnr/p1q1p1p1/n1p2p2/1p1p3p/P5B1/2P5/1P1PPPNP/RNB1K2R b KQk - 0 13
+
+BLACK_WIN
