@@ -130,7 +130,7 @@ public:
     
 private:   
     bool useGPU = true;
-    const std::uint64_t maxCISSize = 10000;
+    const std::uint64_t maxCISSize = 10000000;
     
     static open_spiel::chess::Color AgentColor_to_OpenSpielColor(const PieceColor agent_pC);
     static PieceColor OpenSpielColor_to_RBCColor(const open_spiel::chess::Color os_pC);
@@ -149,6 +149,9 @@ private:
     
     void splitObsFEN(std::string obsFen,std::vector<std::string>& obsFenParts) const;
     void completeMoveData(open_spiel::chess::Move& move,CIS::OnePlayerChessInfo& opponentInfo) const;
+    
+    std::ofstream hypotheseGeneration;
+
     
 protected:
     std::random_device rd;

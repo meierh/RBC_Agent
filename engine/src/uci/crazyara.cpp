@@ -654,7 +654,7 @@ void CrazyAra::rbcTest(int argc, char* argv[])
 
     searchSettings.multiPV = 1;
     auto whitePlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatchesContender, &searchSettings, &playSettings, initialFen, RBCAgent::PieceColor::white,RBCAgent::maxScanEntropy);
-    auto blackPlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatchesContender, &searchSettings, &playSettings, initialFen, RBCAgent::PieceColor::black,RBCAgent::limitedRandom);
+    auto blackPlayer = std::make_unique<RBCAgent>(netSingleContender.get(), netBatchesContender, &searchSettings, &playSettings, initialFen, RBCAgent::PieceColor::black,RBCAgent::maxScanEntropy);
     std::cout<<"Created Players!"<<std::endl;
         
     GamePGN gamePGN;

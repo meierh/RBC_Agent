@@ -470,7 +470,8 @@ class ChessInformationSet : public InformationSet<chessInfoSize>
         std::unique_ptr<std::vector<std::uint64_t>> computeTheNMostProbableBoardsGPU
         (
             Distribution& hypotheseDistro,
-            std::uint64_t& numberOfBoards
+            std::uint64_t& numberOfBoards,
+            bool gpu=true
         );   
         
         /**

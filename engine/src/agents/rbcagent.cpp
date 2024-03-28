@@ -53,6 +53,8 @@ strategy(strategy)
     
     cis = std::make_unique<ChessInformationSet>();
     
+    uint randNum = std::rand();
+    
     FullChessInfo initialGameState(fen);
     if(selfColor==PieceColor::white)
     {
@@ -60,6 +62,7 @@ strategy(strategy)
         cis->add(initialGameState.black,1.0/128);
         opponentColor = PieceColor::black;
         trueOpponentBoard = *(cis->encodeBoard(initialGameState.black,0));
+        hypotheseGeneration = std::ofstream("HypotheseGen_w_"+std::to_string(randNum));
     }
     else
     {
@@ -67,10 +70,12 @@ strategy(strategy)
         cis->add(initialGameState.white,1.0/128);
         opponentColor = PieceColor::white;
         trueOpponentBoard = *(cis->encodeBoard(initialGameState.white,0));
+        hypotheseGeneration = std::ofstream("HypotheseGen_b_"+std::to_string(randNum));
     }
     trueFEN = fen;
     if(cis->validSize()==0)
         throw std::logic_error("Chess information set in empty at creation");
+    
 }
 
 void RBCAgent::recordInformationSetSize(std::ostream& dataFile)
@@ -1872,7 +1877,10 @@ void RBCAgent::handleOpponentMoveInfo
             }
             //std::cout<<std::endl<<encodedHypothese->to_string()<<std::endl<<iter->first.to_string()<<std::endl;
         }
-    };    
+    };
+
+    uint64_t prevSize = cis->size();
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     if(false && useGPU)
     {
         /*
@@ -1935,6 +1943,12 @@ void RBCAgent::handleOpponentMoveInfo
             }
         }
     }
+    uint64_t succSize = newInformationSet.size();
+    std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
+    uint duration = std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count();
+    hypotheseGeneration<<prevSize<<" -> "<<succSize<<":"<<duration<<std::endl;
+
+    
     
     if(newInformationSet.size()>0)
     {
@@ -1965,7 +1979,7 @@ void RBCAgent::handleOpponentMoveInfo
         std::cout<<"Information set in emergency mode"<<std::endl;
         std::cout<<"Player "<<selfColor<<" hypotheses generation done"<<std::endl;
     }
-    
+
     
     std::uint64_t prevSize2 = cis->validSize();
     if(useGPU)

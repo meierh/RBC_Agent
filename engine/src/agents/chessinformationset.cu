@@ -1274,7 +1274,8 @@ void ChessInformationSet::computeBoardProbabilitiesGPU
 std::unique_ptr<std::vector<std::uint64_t>> ChessInformationSet::computeTheNMostProbableBoardsGPU
 (
     Distribution& hypotheseDistro,
-    std::uint64_t& numberOfBoards
+    std::uint64_t& numberOfBoards,
+    bool gpu
 )
 {
     std::uint64_t cis_size = size();
@@ -1282,6 +1283,8 @@ std::unique_ptr<std::vector<std::uint64_t>> ChessInformationSet::computeTheNMost
 
     try
     {
+        if(!gpu)
+            throw std::logic_error("");
         computeBoardProbabilitiesGPU(hypotheseDistro,probabilities);
     }
     catch(...)

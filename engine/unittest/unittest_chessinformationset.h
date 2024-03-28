@@ -1,6 +1,7 @@
 #include <iostream>
 #include "chessinformationset.h"
 #include "rbcagent.h"
+#include <chrono>
 
 auto os_SquareToIndex = open_spiel::chess::SquareToIndex;
 using os_Square = open_spiel::chess::Square;
@@ -818,12 +819,98 @@ TEST(chessinformationset_test, getDistribution_test3)
         RBCAgent::FullChessInfo fci(fen);
         cis.add(fci.white,1.0/128);
     }    
-    std::cout<<"Fen size:"<<fens.size()<<std::endl;
+    //std::cout<<"Fen size:"<<fens.size()<<std::endl;
     
     std::unique_ptr<CIS::Distribution> distributionGPU = cis.computeDistributionGPU();
     std::unique_ptr<CIS::Distribution> distributionCPU = cis.computeDistribution();
-    std::cout<<distributionGPU->printComplete()<<std::endl;
+    //std::cout<<distributionGPU->printComplete()<<std::endl;
     EXPECT_EQ(*distributionCPU,*distributionGPU);
+}
+
+
+TEST(chessinformationset_test, getDistribution_test4Time)
+{
+    using BC = ChessInformationSet::BoardClause;
+    using SQ = ChessInformationSet::Square;
+    using COL = ChessInformationSet::ChessColumn;
+    using ROW = ChessInformationSet::ChessRow;
+    using PT = ChessInformationSet::BoardClause::PieceType;
+    using CIS = ChessInformationSet;
+    
+    uint numberBoards = 5;
+    CIS cis(numberBoards*2);
+    for(uint i=0; i<numberBoards; i++)
+    {
+        std::string& fen = randomFens[i%randomFens.size()];
+        RBCAgent::FullChessInfo fci(fen);
+        cis.add(fci.white,1);
+        cis.add(fci.black,1);
+    }    
+    std::unique_ptr<CIS::Distribution> distributionGPU = cis.computeDistributionGPU();
+    std::unique_ptr<CIS::Distribution> distributionCPU = cis.computeDistribution();
+    
+    std::ofstream distributionTime("DistributionComputeTiming");
+    distributionTime<<"Number of Boards"<<"\t"<<"GPU"<<"\t"<<"CPU \t in µs"<<std::endl;
+
+    std::ofstream mostProbableBoardTime("MostProbableBoardTiming");
+    mostProbableBoardTime<<"Number of Boards"<<"\t"<<"GPU"<<"\t"<<"CPU \t in µs"<<std::endl;
+    
+    std::ofstream checkValidBoards("CheckValidBoardsTiming");
+    checkValidBoards<<"Number of Boards"<<"\t"<<"GPU"<<"\t"<<"CPU \t in µs"<<std::endl;
+    
+    for(uint numberBoards = 5; numberBoards<1e8; numberBoards*=10)
+    {
+        CIS cis(numberBoards*2);
+        for(uint i=0; i<numberBoards; i++)
+        {
+            std::string& fen = randomFens[i%randomFens.size()];
+            RBCAgent::FullChessInfo fci(fen);
+            cis.add(fci.white,1);
+            cis.add(fci.black,1);
+        }    
+
+        std::chrono::steady_clock::time_point begin1GPU = std::chrono::steady_clock::now();
+        std::unique_ptr<CIS::Distribution> distributionGPU = cis.computeDistributionGPU();
+        std::chrono::steady_clock::time_point end1GPU = std::chrono::steady_clock::now();
+        uint duration1GPU = std::chrono::duration_cast<std::chrono::microseconds>(end1GPU - begin1GPU).count();
+
+    
+        std::chrono::steady_clock::time_point begin1CPU = std::chrono::steady_clock::now();
+        std::unique_ptr<CIS::Distribution> distributionCPU = cis.computeDistribution();
+        std::chrono::steady_clock::time_point end1CPU = std::chrono::steady_clock::now();
+        uint duration1CPU = std::chrono::duration_cast<std::chrono::microseconds>(end1CPU - begin1CPU).count();
+        
+        distributionTime<<(numberBoards*2)<<"\t"<<duration1GPU<<"\t"<<duration1CPU<<std::endl;
+        
+        std::chrono::steady_clock::time_point begin2GPU = std::chrono::steady_clock::now();
+        uint64_t _numberBoards = 10000;
+        cis.computeTheNMostProbableBoardsGPU(*distributionGPU,_numberBoards);
+        std::chrono::steady_clock::time_point end2GPU = std::chrono::steady_clock::now();
+        uint duration2GPU = std::chrono::duration_cast<std::chrono::microseconds>(end2GPU - begin2GPU).count();
+        
+        std::chrono::steady_clock::time_point begin2CPU = std::chrono::steady_clock::now();
+        _numberBoards = 10000;
+        cis.computeTheNMostProbableBoardsGPU(*distributionGPU,_numberBoards,false);
+        std::chrono::steady_clock::time_point end2CPU = std::chrono::steady_clock::now();
+        uint duration2CPU = std::chrono::duration_cast<std::chrono::microseconds>(end2CPU - begin2CPU).count();
+
+        mostProbableBoardTime<<(numberBoards*2)<<"\t"<<duration2GPU<<"\t"<<duration2CPU<<std::endl;
+        
+        std::vector<CIS::BoardClause> empty;
+        std::chrono::steady_clock::time_point begin3GPU = std::chrono::steady_clock::now();
+        cis.markIncompatibleBoardsGPU(empty);
+        std::chrono::steady_clock::time_point end3GPU = std::chrono::steady_clock::now();
+        uint duration3GPU = std::chrono::duration_cast<std::chrono::microseconds>(end3GPU - begin3GPU).count();
+        
+        std::chrono::steady_clock::time_point begin3CPU = std::chrono::steady_clock::now();
+        cis.markIncompatibleBoards(empty);
+        std::chrono::steady_clock::time_point end3CPU = std::chrono::steady_clock::now();
+        uint duration3CPU = std::chrono::duration_cast<std::chrono::microseconds>(end3CPU - begin3CPU).count();
+
+        checkValidBoards<<(numberBoards*2)<<"\t"<<duration3GPU<<"\t"<<duration3CPU<<std::endl;
+    }
+    
+    
 }
 
 TEST(chessinformationset_test, getEntropyGPU_test)
